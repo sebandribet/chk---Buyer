@@ -1,10 +1,10 @@
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const test = require("node:test");
-const ganache = require("ganache");
-const { ethers } = require("ethers");
-const solc = require("solc");
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import ganache from "ganache";
+import { ethers } from "ethers";
+import solc from "solc";
 
 const USD_DECIMALS = 6;
 const usd = (value) => ethers.parseUnits(value, USD_DECIMALS);

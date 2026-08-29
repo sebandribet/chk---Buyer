@@ -1,3 +1,5 @@
+import type { CanonicalMandate } from "../../shared/mandate.js";
+
 /**
  * UI-facing mandate models for the Chk! Buyer prototype.
  *
@@ -143,6 +145,41 @@ export function getAvailableMandateActions(mandate: MandateDisplay, now: Date = 
     case "Archived":
       return [];
   }
+}
+
+/** Converts the UI view model into the shared agent/payment/merchant vocabulary. */
+export function toCanonicalMandate(
+  mandate: MandateDisplay,
+  owner = "business-owner",
+  now: Date = new Date(),
+): CanonicalMandate {
+  const policy = mandate.form.policy;
+  return {
+    mandateId: mandate.mandateId ?? null,
+    revision: mandate.version,
+    status: getMandateStatus(mandate, now),
+    owner,
+    agent: mandate.form.agentAddress,
+    paymentDelegate: mandate.form.paymentDelegateAddress,
+    validAfter: mandate.form.validFrom,
+    expiresAt: mandate.form.expiresAt,
+    maxPerOperation: policy.maxOrderAmount,
+    maxTotal: policy.monthlyBudget,
+    spent: mandate.budget.spent,
+    reserved: mandate.budget.reserved,
+    policyHash: mandate.policyHash ?? null,
+    policy: {
+      currency: policy.currency,
+      allowedSuppliers: policy.suppliers.map((supplier) => supplier.supplierId),
+      allowedCategories: [...new Set(policy.suppliers.flatMap((supplier) => supplier.allowedCategories))],
+      allowedSkus: [...new Set(policy.suppliers.flatMap((supplier) => supplier.allowedSkus))],
+      maxUnitPrice: policy.maxUnitPrice,
+      maxOrderAmount: policy.maxOrderAmount,
+      maxQuantityPerOrder: policy.maxQuantityPerOrder,
+      replenishmentFrequencyDays: policy.replenishmentFrequencyDays,
+      exceptionHandling: policy.exceptionHandling,
+    },
+  };
 }
 
 const baseForm: MandateFormValues = {

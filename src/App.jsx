@@ -22,6 +22,7 @@ import {
   Unplug,
   WalletCards,
 } from "lucide-react";
+import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisplayModels.ts";
 
 const tabs = [
   { id: "chat", label: "Chat", icon: MessageSquare },
@@ -63,7 +64,7 @@ const initialMessages = [
   },
 ];
 
-const initialMandates = [
+const initialMandateViews = [
   {
     id: "MD-001",
     product: "Film stretch industrial",
@@ -161,6 +162,17 @@ const initialMandates = [
     lastCard: "—",
   },
 ];
+
+const canonicalFixtureByMandateId = {
+  "MD-001": mandateScenarios[1].mandate,
+  "MD-002": mandateScenarios[3].mandate,
+  "MD-003": mandateScenarios[0].mandate,
+};
+
+const initialMandates = initialMandateViews.map((mandate) => ({
+  ...mandate,
+  canonical: toCanonicalMandate(canonicalFixtureByMandateId[mandate.id], mandate.owner),
+}));
 
 const purchases = [
   {
@@ -283,7 +295,11 @@ function App() {
             <MandateDetailPage
               mandate={mandates.find((item) => item.id === selectedMandateId)}
               onBack={() => setSelectedMandateId(null)}
-              onRevoke={(mandateId) => setMandates((current) => current.map((item) => item.id === mandateId ? { ...item, status: "Revocado" } : item))}
+              onRevoke={(mandateId) => setMandates((current) => current.map((item) => item.id === mandateId ? {
+                ...item,
+                status: "Revocado",
+                canonical: { ...item.canonical, status: "Revoked" },
+              } : item))}
             />
           ) : (
             <MandatesPage
@@ -644,7 +660,7 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
           <div className="merchant-verification-copy">
             <span>PRESENTACIÓN AL VENDEDOR · DEMO</span>
             <h2>{lastPurchase.supplier} aceptó la compra</h2>
-            <p>El vendedor verificó la autorización actual contra MandateModule sin acceder a la política privada completa.</p>
+            <p>El vendedor verificó la autorización actual contra MandateVault sin acceder a la política privada completa.</p>
           </div>
           <div className="merchant-checks">
             <span><Check size={13} />Mandato activo</span>
@@ -660,8 +676,8 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
         <dl>
           <DataRow label="Owner" value={mandate.owner} />
           <DataRow label="Agent" value={mandate.agentAddress} />
-          <DataRow label="Policy hash" value={mandate.policyHash} />
-          <DataRow label="Contrato" value="MandateModule · Polygon Demo" />
+          <DataRow label="Policy hash" value={mandate.canonical?.policyHash ?? mandate.policyHash} />
+          <DataRow label="Contrato" value="MandateVault · Polygon Demo" />
         </dl>
       </details>
     </div>

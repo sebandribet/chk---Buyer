@@ -11,6 +11,7 @@
  */
 
 import type { Category } from "./catalog.js";
+import type { CanonicalMandate } from "../../../shared/mandate.js";
 
 export interface MandateState {
   mandateId: string;
@@ -78,4 +79,49 @@ export function isUsable(m: MandateState, now: Date): { usable: boolean; reason?
     return { usable: false, reason: "mandate_expired" };
   }
   return { usable: true };
+}
+
+/**
+ * Adapter used when the agent receives a mandate created by the UI rather than
+ * by its local fake port. The policy engine still reads fresh chain state before
+ * a purchase; this representation is for shared API payloads and display.
+ */
+export function toCanonicalMandate(
+  state: MandateState,
+  identity: { owner: string; agent: string; paymentDelegate: string; policyHash: string | null },
+): CanonicalMandate {
+  const status: CanonicalMandate["status"] = !state.active
+    ? "Archived"
+    : state.revokedAt !== null
+      ? "Revoked"
+      : state.expiresAt !== null && new Date(state.expiresAt).getTime() <= Date.now()
+        ? "Expired"
+        : "Active";
+
+  return {
+    mandateId: state.mandateId,
+    revision: 1,
+    status,
+    owner: identity.owner,
+    agent: identity.agent,
+    paymentDelegate: identity.paymentDelegate,
+    validAfter: state.readAt,
+    expiresAt: state.expiresAt ?? "",
+    maxPerOperation: state.maxPerPurchaseArs ?? state.budgetTotalArs,
+    maxTotal: state.budgetTotalArs,
+    spent: state.budgetSpentArs,
+    reserved: 0,
+    policyHash: identity.policyHash,
+    policy: {
+      currency: "ARS",
+      allowedSuppliers: state.allowedSuppliers ?? [],
+      allowedCategories: state.allowedCategories,
+      allowedSkus: [],
+      maxUnitPrice: null,
+      maxOrderAmount: state.maxPerPurchaseArs ?? state.budgetTotalArs,
+      maxQuantityPerOrder: null,
+      replenishmentFrequencyDays: null,
+      exceptionHandling: "Request approval",
+    },
+  };
 }

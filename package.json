@@ -1,21 +1,16 @@
 {
-  "name": "buyer-who-isnt-human-contracts",
-  "private": true,
-  "scripts": {
-    "test:contracts": "node --test test/MandateVault.test.js"
-  },
-  "devDependencies": {
-    "ethers": "^6.16.0",
-    "ganache": "^7.9.2",
-    "solc": "0.8.24"
   "name": "chk-buyer",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"node --watch server/index.js\"",
     "build": "vite build",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "npm run test:contracts && npm run test:mandates && npm run test:agent && npm run build",
+    "test:contracts": "node --test test/MandateVault.test.js",
+    "test:mandates": "forge test",
+    "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.24",
@@ -29,6 +24,12 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
+    "ethers": "^6.16.0",
+    "ganache": "^7.9.2",
+    "solc": "0.8.24",
     "vite": "^6.0.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
