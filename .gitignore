@@ -11,3 +11,8 @@ cache/
 .env
 .env.*
 !.env.example
+node_modules/
+dist/
+.baileys-auth/
+.env
+*.docx
