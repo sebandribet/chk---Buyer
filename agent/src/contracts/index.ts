@@ -5,6 +5,7 @@
  * Si un tipo vive en otro lado, dos personas lo van a escribir distinto.
  */
 
+export * from "./clock.js";
 export * from "./catalog.js";
 export * from "./intent.js";
 export * from "./mandate.js";

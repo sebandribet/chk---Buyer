@@ -9,6 +9,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "demo": "tsx --env-file-if-exists=.env src/cli/demo.ts",
+    "demo:mandate": "tsx src/cli/mandate-demo.ts",
     "record": "LLM_MODE=record tsx --env-file-if-exists=.env src/cli/record.ts",
     "scrape": "tsx --env-file-if-exists=.env src/cli/scrape.ts"
   },

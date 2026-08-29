@@ -89,6 +89,38 @@ export type AuditEvent = AuditEventBase &
      */
     | { type: "injection_attempt_detected"; sku: string; supplierId: string; snippet: string }
     | { type: "policy_check"; check: string; passed: boolean; detail: string }
+    /** El merchant cerró el carrito y lo firmó. A partir de acá el precio no lo pone el agente. */
+    | {
+        type: "checkout_closed";
+        checkoutId: string;
+        merchantId: string;
+        /** Unidad mínima de la moneda. */
+        amount: number;
+        checkoutHash: string;
+      }
+    /**
+     * Se reservó presupuesto on-chain. Es el momento exacto en que la propuesta
+     * pasa a comprometer plata, y por eso queda con el id de la autorización:
+     * es lo que después permite atarlo al cobro y al recibo del vendedor.
+     */
+    | {
+        type: "authorization_reserved";
+        authorizationId: string;
+        mandateId: string;
+        amount: number;
+        expiresAt: number;
+      }
+    /**
+     * Qué se le mostró al vendedor y qué NO. Los campos ocultos se registran
+     * por nombre: sin eso, "revelamos lo mínimo" es una afirmación que nadie
+     * puede auditar después.
+     */
+    | {
+        type: "presentation_built";
+        audience: string;
+        disclosed: string[];
+        withheld: string[];
+      }
     /**
      * `clarification` y `suggestion` no son `DecisionOutcome`: en ninguno de los
      * dos el agente llegó a decidir una compra.

@@ -76,6 +76,19 @@ function line(event: AuditEvent): string {
       return `  ${YELLOW}⚠ prompt injection${RESET} en ${event.sku} ${DIM}(${event.supplierId}): "${event.snippet}"${RESET}`;
     case "policy_check":
       return `  ${event.passed ? GREEN + "✓" : RED + "✗"}${RESET} ${event.check} ${DIM}${event.detail}${RESET}`;
+    case "checkout_closed":
+      return `${CYAN}✎ carrito cerrado y firmado por ${event.merchantId}${RESET} ${DIM}${event.checkoutId} · ${ars(event.amount / 100)} · hash ${event.checkoutHash.slice(0, 12)}…${RESET}`;
+    case "authorization_reserved":
+      return (
+        `${GREEN}⛓ reserva on-chain${RESET} ${ars(event.amount / 100)} ${DIM}sobre ${event.mandateId.slice(0, 12)}…\n` +
+        `  ${event.authorizationId.slice(0, 18)}… · de un solo uso · vence ${new Date(event.expiresAt * 1000).toISOString()}${RESET}`
+      );
+    case "presentation_built":
+      return (
+        `${CYAN}▤ presentación para ${event.audience}${RESET}\n` +
+        `  ${GREEN}revela${RESET}  ${event.disclosed.join(", ") || "(nada)"}\n` +
+        `  ${DIM}oculta  ${event.withheld.join(", ") || "(nada)"}${RESET}`
+      );
     case "outcome_emitted":
       return `${BOLD}■ ${event.outcome}${RESET}${event.reason !== undefined ? ` ${DIM}(${event.reason})${RESET}` : ""}`;
   }
