@@ -4,6 +4,10 @@ An autonomous purchasing system for SMEs. A business owner gives an AI agent a *
 
 The owner delegates purchasing decisions, not unrestricted access to money.
 
+## Why blockchain
+
+Blockchain gives CHK Buyer a shared, tamper-evident source of truth for the owner’s mandate, every agent authorization, and every payment outcome. Smart contracts enforce spending limits and live revocation automatically, so neither the agent nor the seller can bypass the rules. This enables autonomous purchasing with verifiable accountability across buyer, seller, and auditor—without trusting one central party’s internal database.
+
 ## The problem
 
 SMEs need to compare supplier offers and react quickly to prices, but existing payment systems assume that the person pressing “pay” is human. Giving an AI agent a raw card is unsafe; blocking it means losing the benefits of automation.
@@ -44,18 +48,18 @@ Otherwise the system rejects the purchase or asks for human approval. Revoking a
 
 ## Payment architecture
 
-The core product is the **transaction authorization engine**, not a card issuer. It verifies that an agent has authority for one exact purchase and reserves the funds before a merchant can capture them.
+The core product is the **transaction authorization engine**, not a card issuer. It verifies that an agent has authority for one exact purchase, charges the buyer's saved payment method for that purchase, and issues a merchant-specific payment authorization.
 
 ```text
-MandateVault (on-chain) → policy/payment engine → payment adapter → merchant
-       ↑                         ↓                    ↓
-  funds, limits,           one-use payment      settle / cancel /
-  revocation, audit         authorization        refund events
+MandateVault (on-chain) → card-on-file adapter → one-use virtual card → merchant
+       ↑                         ↓                         ↓
+ limits, capacity,      buyer charged for          capture / refund /
+ revocation, audit       the exact order             settlement events
 ```
 
 ### MandateVault
 
-The smart contract holds the payment reserve and enforces the mandate:
+The smart contract records the mandate and enforces its payment authority:
 
 - owner, authorized agent and approved supplier/category;
 - maximum order value and total budget;
@@ -75,25 +79,35 @@ Revocation prevents new reservations. It does not pretend to reverse a payment t
 
 ## Hackathon MVP
 
-The MVP proves the difficult part end to end using test USDC and a simulated merchant/payment adapter. It does **not** attempt to become a regulated card issuer in 24 hours.
+The MVP proves the difficult part end to end using a mock USD payment method, mock card processor and simulated merchant. It does **not** attempt to become a regulated card issuer in 24 hours.
 
 ### Build
 
-1. A UI for the owner to create, fund and revoke a mandate.
-2. A Solidity `MandateVault` that actually validates limits and locks test USDC.
+1. A UI for the owner to register a payment method, create and revoke a mandate.
+2. A Solidity `MandateVault` that actually validates static limits and records payment capacity without locking the full mandate budget.
 3. An agent that finds an offer matching the fixed mandate and calls `reservePurchase()` without asking the owner for confirmation.
-4. A simple payment service that issues a short-lived, one-use `paymentId` for the exact merchant and amount.
-5. Merchant controls to authorize, capture, cancel or refund that payment; capture settles the on-chain reservation.
+4. A mock card processor that charges the buyer for the exact order and issues a short-lived, one-use virtual card for the exact merchant and amount.
+5. Merchant controls to capture or cancel that payment; capture transfers mock USD to the merchant and cancellation refunds the buyer.
 6. An audit view for the owner, merchant and judge.
 
 ### Demo script
 
-1. Owner funds a $1,000 mandate for a defined product from approved SME suppliers.
-2. Agent autonomously buys an eligible $400 offer; merchant captures and settlement succeeds.
-3. Agent attempts an ineligible or over-budget purchase; it is rejected.
-4. Owner revokes the mandate; a new attempt, including an unused payment token, fails.
+1. Owner links a payment method and creates a $1,000 mandate for a defined product from an approved SME supplier.
+2. Agent autonomously buys an eligible $400 offer; the buyer is charged $400 and a one-use virtual card is issued.
+3. Merchant captures the virtual card and receives $400.
+4. Agent attempts an ineligible or over-budget purchase; it is rejected.
+5. Owner revokes the mandate; a new attempt and capture of an unused virtual card fail, then the buyer is refunded.
 
 The agent never receives the owner's raw card details.
+
+### Run the smart-contract test
+
+```bash
+npm install
+npm run test:contracts
+```
+
+The local-chain test deploys `MockUSD`, `MockCardProcessor` and `MandateVault`, then plays the owner, authorized agent and approved seller. It proves that creating a mandate locks no money, an eligible purchase charges the buyer and pays the seller only after capture, failed charges leave capacity untouched, and revocation refunds an unused payment authorization.
 
 ## Future production goal: traditional USD, universal merchant access
 
@@ -119,7 +133,7 @@ The buyer and seller can both use USD without seeing a crypto wallet. Blockchain
 
 ### Rail selection
 
-- **Blockchain-enabled seller:** settle directly in USDC through the smart-contract escrow.
+- **Blockchain-enabled seller:** future direct settlement through a smart-contract escrow.
 - **Card-accepting seller:** use a one-time virtual USD card.
 - **Large B2B seller:** future bank-transfer/invoice adapter.
 

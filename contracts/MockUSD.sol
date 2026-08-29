@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @notice Test-only 6-decimal ERC-20 for the hackathon MVP.
-/// @dev Never use this contract as a production payment token.
-contract MockUSDC {
-    string public constant name = "Mock USD Coin";
-    string public constant symbol = "mUSDC";
+/// @notice Test-only 6-decimal USD balance used to simulate the buyer's bank/card balance.
+/// @dev This is not a stablecoin or a production payment token.
+contract MockUSD {
+    string public constant name = "Mock US Dollar";
+    string public constant symbol = "mUSD";
     uint8 public constant decimals = 6;
 
     uint256 public totalSupply;

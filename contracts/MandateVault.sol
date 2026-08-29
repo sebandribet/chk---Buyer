@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20} from "./interfaces/IERC20.sol";
+import {IMockCardProcessor} from "./interfaces/IMockCardProcessor.sol";
 
 /// @title MandateVault
-/// @notice Escrows an owner's tokens and lets a named agent reserve only the purchases
-///         allowed by a static mandate. The approved merchant captures a reservation.
+/// @notice Enforces static purchase mandates and delegates mock USD movement to a card processor.
+/// @dev Despite its name, this version does not custody buyer funds. It is the on-chain
+///      authorization ledger; `MockCardProcessor` simulates the off-chain payment adapter.
 contract MandateVault {
     enum MandateStatus {
         None,
@@ -24,6 +25,7 @@ contract MandateVault {
         address owner;
         address agent;
         address merchant;
+        bytes32 paymentMethodId;
         bytes32 productHash;
         uint256 remainingQuantity;
         uint256 maxUnitPrice;
@@ -40,7 +42,7 @@ contract MandateVault {
         PurchaseStatus status;
     }
 
-    IERC20 public immutable paymentToken;
+    IMockCardProcessor public immutable cardProcessor;
     uint256 public nextMandateId = 1;
 
     mapping(uint256 mandateId => Mandate mandate) public mandates;
@@ -53,6 +55,7 @@ contract MandateVault {
         address indexed owner,
         address indexed agent,
         address merchant,
+        bytes32 paymentMethodId,
         bytes32 productHash,
         uint256 quantity,
         uint256 maxUnitPrice,
@@ -70,7 +73,6 @@ contract MandateVault {
     event PurchaseSettled(bytes32 indexed purchaseId, uint256 indexed mandateId, address indexed merchant, uint256 amount);
     event PurchaseReleased(bytes32 indexed purchaseId, uint256 indexed mandateId, uint256 amount);
     event MandateRevoked(uint256 indexed mandateId);
-    event AvailableFundsWithdrawn(uint256 indexed mandateId, address indexed owner, uint256 amount);
 
     modifier nonReentrant() {
         require(_entered == 0, "REENTRANCY");
@@ -79,28 +81,27 @@ contract MandateVault {
         _entered = 0;
     }
 
-    constructor(IERC20 paymentToken_) {
-        require(address(paymentToken_) != address(0), "ZERO_TOKEN");
-        paymentToken = paymentToken_;
+    constructor(IMockCardProcessor cardProcessor_) {
+        require(address(cardProcessor_) != address(0), "ZERO_CARD_PROCESSOR");
+        cardProcessor = cardProcessor_;
     }
 
-    /// @notice Creates and funds a fixed mandate in one transaction.
-    /// @param budget Token amount escrowed for this mandate (6 decimals for MockUSDC).
+    /// @notice Creates a static mandate. No buyer funds are locked at creation.
+    /// @param budget Maximum spend authorized under this mandate, in USD cents/microunits.
     function createMandate(
         address agent,
         address merchant,
+        bytes32 paymentMethodId,
         bytes32 productHash,
         uint256 quantity,
         uint256 maxUnitPrice,
         uint256 budget,
         uint64 expiresAt
-    ) external nonReentrant returns (uint256 mandateId) {
+    ) external returns (uint256 mandateId) {
         require(agent != address(0) && merchant != address(0), "ZERO_PARTY");
-        require(productHash != bytes32(0), "ZERO_PRODUCT");
+        require(paymentMethodId != bytes32(0) && productHash != bytes32(0), "MISSING_REFERENCE");
         require(quantity > 0 && maxUnitPrice > 0 && budget > 0, "INVALID_LIMIT");
         require(expiresAt > block.timestamp, "INVALID_EXPIRY");
-
-        // The funded budget must cover buying the full mandated quantity at its price cap.
         require(budget >= quantity * maxUnitPrice, "BUDGET_BELOW_CAP");
 
         mandateId = nextMandateId++;
@@ -108,6 +109,7 @@ contract MandateVault {
             owner: msg.sender,
             agent: agent,
             merchant: merchant,
+            paymentMethodId: paymentMethodId,
             productHash: productHash,
             remainingQuantity: quantity,
             maxUnitPrice: maxUnitPrice,
@@ -116,18 +118,28 @@ contract MandateVault {
             status: MandateStatus.Active
         });
 
-        require(paymentToken.transferFrom(msg.sender, address(this), budget), "FUNDING_FAILED");
-        emit MandateCreated(mandateId, msg.sender, agent, merchant, productHash, quantity, maxUnitPrice, budget, expiresAt);
+        emit MandateCreated(
+            mandateId,
+            msg.sender,
+            agent,
+            merchant,
+            paymentMethodId,
+            productHash,
+            quantity,
+            maxUnitPrice,
+            budget,
+            expiresAt
+        );
     }
 
-    /// @notice Lets the authorized agent lock funds for one exact order.
-    /// @dev `orderId` is an off-chain order identifier hashed by the caller. It may only be used once per mandate.
+    /// @notice Validates an agent purchase, charges the saved buyer credential, and issues a one-use virtual card.
+    /// @dev If the buyer charge fails, this entire transaction reverts and mandate capacity is unchanged.
     function reservePurchase(
         uint256 mandateId,
         bytes32 orderId,
         uint256 quantity,
         uint256 unitPrice
-    ) external returns (bytes32 purchaseId) {
+    ) external nonReentrant returns (bytes32 purchaseId) {
         Mandate storage mandate = mandates[mandateId];
         require(msg.sender == mandate.agent, "NOT_AGENT");
         require(_isActive(mandate), "MANDATE_INACTIVE");
@@ -141,6 +153,7 @@ contract MandateVault {
         purchaseId = keccak256(abi.encode(mandateId, orderId));
         require(purchases[purchaseId].status == PurchaseStatus.None, "ORDER_ALREADY_USED");
 
+        // A failed card-on-file charge reverts all of these state changes.
         mandate.remainingQuantity -= quantity;
         mandate.remainingBudget -= amount;
         purchases[purchaseId] = Purchase({
@@ -150,12 +163,19 @@ contract MandateVault {
             amount: amount,
             status: PurchaseStatus.Reserved
         });
+        cardProcessor.chargeAndIssueVirtualCard(
+            purchaseId,
+            mandate.owner,
+            mandate.paymentMethodId,
+            mandate.merchant,
+            amount
+        );
 
         emit PurchaseReserved(purchaseId, mandateId, orderId, quantity, unitPrice, amount);
     }
 
-    /// @notice Captures a reserved purchase and transfers escrowed tokens to the approved merchant.
-    /// @dev A revoked or expired mandate cannot capture an unused reservation.
+    /// @notice Lets the approved merchant capture its one-use virtual card and receive USD.
+    /// @dev A revoked or expired mandate cannot settle an unused authorization.
     function settlePurchase(bytes32 purchaseId) external nonReentrant {
         Purchase storage purchase = purchases[purchaseId];
         Mandate storage mandate = mandates[purchase.mandateId];
@@ -164,12 +184,12 @@ contract MandateVault {
         require(_isActive(mandate), "MANDATE_INACTIVE");
 
         purchase.status = PurchaseStatus.Settled;
-        require(paymentToken.transfer(mandate.merchant, purchase.amount), "SETTLEMENT_FAILED");
+        cardProcessor.captureVirtualCard(purchaseId, mandate.merchant);
         emit PurchaseSettled(purchaseId, purchase.mandateId, mandate.merchant, purchase.amount);
     }
 
-    /// @notice Cancels an unused reservation and returns its capacity to the mandate.
-    function releasePurchase(bytes32 purchaseId) external {
+    /// @notice Cancels an unused virtual card, refunds the buyer, and restores mandate capacity.
+    function releasePurchase(bytes32 purchaseId) external nonReentrant {
         Purchase storage purchase = purchases[purchaseId];
         Mandate storage mandate = mandates[purchase.mandateId];
         require(purchase.status == PurchaseStatus.Reserved, "PURCHASE_NOT_RESERVED");
@@ -181,10 +201,11 @@ contract MandateVault {
         purchase.status = PurchaseStatus.Released;
         mandate.remainingQuantity += purchase.quantity;
         mandate.remainingBudget += purchase.amount;
+        cardProcessor.refundUncapturedVirtualCard(purchaseId);
         emit PurchaseReleased(purchaseId, purchase.mandateId, purchase.amount);
     }
 
-    /// @notice Immediately prevents new reservations and settlement of unused reservations.
+    /// @notice Immediately prevents new purchases and capture of unused virtual cards.
     function revokeMandate(uint256 mandateId) external {
         Mandate storage mandate = mandates[mandateId];
         require(msg.sender == mandate.owner, "NOT_OWNER");
@@ -192,21 +213,6 @@ contract MandateVault {
 
         mandate.status = MandateStatus.Revoked;
         emit MandateRevoked(mandateId);
-    }
-
-    /// @notice Recovers unreserved funds after revocation or expiry.
-    /// @dev Reserved purchases must be settled or released separately.
-    function withdrawAvailableFunds(uint256 mandateId) external nonReentrant {
-        Mandate storage mandate = mandates[mandateId];
-        require(msg.sender == mandate.owner, "NOT_OWNER");
-        require(mandate.status == MandateStatus.Revoked || block.timestamp >= mandate.expiresAt, "MANDATE_STILL_ACTIVE");
-
-        uint256 amount = mandate.remainingBudget;
-        require(amount > 0, "NO_AVAILABLE_FUNDS");
-        mandate.remainingBudget = 0;
-
-        require(paymentToken.transfer(mandate.owner, amount), "WITHDRAWAL_FAILED");
-        emit AvailableFundsWithdrawn(mandateId, mandate.owner, amount);
     }
 
     function isMandateActive(uint256 mandateId) external view returns (bool) {
