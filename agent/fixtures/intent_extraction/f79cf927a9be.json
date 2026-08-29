@@ -1,0 +1,46 @@
+{
+  "op": "intent_extraction",
+  "user": "Reponé 12 litros de leche descremada y 2 kilos de café molido, hasta $200.000",
+  "recordedAt": "2026-08-29T18:10:04.990Z",
+  "response": {
+    "status": "ok",
+    "commitment": "committed",
+    "natural_language_description": "Reponé 12 litros de leche descremada y 2 kilos de café molido, hasta $200.000",
+    "needs": [
+      {
+        "canonical": "leche",
+        "attrs": [
+          {
+            "key": "tipo",
+            "value": "descremada"
+          }
+        ],
+        "qty": 12,
+        "unit": "L",
+        "substitutes_allowed": false
+      },
+      {
+        "canonical": "cafe",
+        "attrs": [
+          {
+            "key": "tipo",
+            "value": "molido"
+          }
+        ],
+        "qty": 2,
+        "unit": "kg",
+        "substitutes_allowed": false
+      }
+    ],
+    "constraints": {
+      "budget_ars": 200000,
+      "allowed_categories": [],
+      "forbidden_categories": [],
+      "allowed_suppliers": null,
+      "max_delivery_days": null
+    },
+    "intent_expiry": null,
+    "user_cart_confirmation_required": false,
+    "questions": []
+  }
+}
