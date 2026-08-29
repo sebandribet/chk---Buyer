@@ -22,6 +22,22 @@ Un mandate es una autorización firmada y verificable, no un medio de pago ni un
 
 El smart contract es el ancla de estado compartido y revocable; no modelamos cada regla de negocio on-chain. Esto mantiene costos y privacidad razonables y permite integrar cualquier rail de pago. Para el pago real, el bloque de pagos deberá exigir una autorización efímera ligada a `mandateId`, intención, monto, merchant y expiración corta, evitando replay.
 
+### Módulo on-chain implementado
+
+El contrato está en [`contracts/mandates`](contracts/mandates). El programa de compras ([`BuyerCheckoutCoordinator`](contracts/BuyerCheckoutCoordinator.sol)) solo depende de [`IMandateModule`](contracts/mandates/IMandateModule.sol): no accede al storage ni replica la lógica de autorización. Para desplegar sin dependencia circular: se despliega `MandateModule`, se despliega el coordinator con su dirección y el admin del módulo ejecuta `setCoordinator`.
+
+```text
+Purchase coordinator -> IMandateModule.reserveAuthorization(...) -> payment adapter.consumeAuthorization(...)
+       |                         |                                          |
+       |                         +-- TTL, revocación, agente, scope,       +-- uso único
+       |                             límite por operación y presupuesto
+       +-- valida la política completa off-chain y construye intentHash
+```
+
+`MandateModule` soporta crear, enmendar y revocar mandates. Cada mandate queda ligado a una clave de agente y a un adapter de pago; configura TTL, tope por operación, presupuesto total, acciones permitidas y el hash de la política completa. El coordinator reserva una autorización de un solo uso, ligada al hash de intención; el adapter designado la consume. Enmiendas invalidan reservas anteriores y las reservas vencidas pueden liberarse sin permisos. Los eventos constituyen el audit log on-chain, mientras que los detalles privados/evidencia quedan hasheados off-chain.
+
+Para reposición de insumos de PyMEs, la política off-chain debe incluir proveedor, categoría/SKU permitidos, frecuencia de reposición, cantidad máxima y precio unitario/total. El scraper o plugin de ChatGPT puede proponer la compra, pero no puede aprobarla: siempre presenta una intención verificable al coordinator.
+
 ## Invariantes de seguridad
 
 1. Un agente solo puede actuar si el mandate está activo, no expiró y su clave coincide.
