@@ -89,6 +89,22 @@ function line(event: AuditEvent): string {
         `  ${GREEN}revela${RESET}  ${event.disclosed.join(", ") || "(nada)"}\n` +
         `  ${DIM}oculta  ${event.withheld.join(", ") || "(nada)"}${RESET}`
       );
+    case "payment_authorized":
+      return (
+        `${GREEN}▣ plata retenida${RESET} ${DIM}${event.provider} · ${event.holdRef}${RESET}\n` +
+        `  ${BOLD}${event.authorizedCurrency.toUpperCase()} ${ars(event.authorizedMinor / 100)}${RESET} ` +
+        `${DIM}→ ${event.chargedCurrency.toUpperCase()} ${ars(event.chargedMinor / 100)} (tasa ${event.fxRate})${RESET}\n` +
+        `  ${YELLOW}todavía no se movió un peso: acá revocar todavía sirve${RESET}`
+      );
+    case "payment_captured":
+      return (
+        `${GREEN}${BOLD}▣ cobrado${RESET} ${event.capturedCurrency.toUpperCase()} ${ars(event.capturedMinor / 100)} ` +
+        `${DIM}· ${event.captureRef} (esto es lo que se disputa después)${RESET}`
+      );
+    case "payment_released":
+      return `${YELLOW}▣ retención liberada${RESET} ${DIM}${event.holdRef} · ${event.reason} — la plata nunca se movió${RESET}`;
+    case "payment_failed":
+      return `${RED}▣ el proveedor rechazó${RESET} ${event.code} ${DIM}${event.detail}${RESET}`;
     case "outcome_emitted":
       return `${BOLD}■ ${event.outcome}${RESET}${event.reason !== undefined ? ` ${DIM}(${event.reason})${RESET}` : ""}`;
   }

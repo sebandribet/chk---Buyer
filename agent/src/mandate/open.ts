@@ -27,6 +27,7 @@ import type {
   Disclosure,
   MerchantRef,
   OpenCheckoutMandate,
+  PaymentInstrumentRef,
   SignedCredential,
 } from "../../../shared/ap2.js";
 import { buildConstraints, policyHash, toMinorUnits } from "./constraints.js";
@@ -51,6 +52,14 @@ export interface MandateIdentity {
   /** Quién puede consumir la reserva para cobrar. */
   paymentDelegate: string;
   currency: string;
+  /**
+   * Con qué tarjetas puede pagar este mandato.
+   *
+   * Viene de acá y no del borrador a propósito: el borrador lo redacta el
+   * agente, y de qué tarjeta se usa no opina el agente. El humano la elige en
+   * el momento de firmar, viendo marca y últimos cuatro dígitos.
+   */
+  paymentInstruments: PaymentInstrumentRef[];
 }
 
 export interface IssuedMandate {
@@ -126,6 +135,7 @@ export async function confirmMandate(
     maxPerOperationArs: draft.suggestedMaxPerPurchaseArs,
     maxTotalArs: draft.suggestedBudgetArs,
     maxDeliveryDays: draft.maxDeliveryDays,
+    paymentInstruments: identity.paymentInstruments,
   });
 
   const hash = policyHash(constraints);

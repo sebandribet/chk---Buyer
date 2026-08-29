@@ -181,6 +181,22 @@ export interface AuthorizationPort {
 }
 
 /**
+ * Consumir la reserva: descontar del presupuesto lo que efectivamente se gastó.
+ *
+ * Puerto aparte del que reserva porque lo usa OTRO actor. Reservar es del policy
+ * engine; consumir es del delegado de pago, que es quien mueve la plata. En el
+ * contrato la separación es real: `consumeAuthorization` exige
+ * `msg.sender == paymentDelegate`, así que ni el agente ni el policy engine
+ * pueden llamarlo aunque quieran.
+ *
+ * Se llama DESPUÉS de cobrar, nunca antes. El contrato es el registro de lo que
+ * se gastó de verdad; adelantarlo lo convertiría en un registro de intenciones.
+ */
+export interface SettlementPort {
+  consume(authorizationId: string, paymentDelegate: string): Promise<void>;
+}
+
+/**
  * Lo que el merchant necesita leer de la chain para verificar.
  *
  * Es de sólo lectura y deliberadamente chico: el merchant comprueba que el

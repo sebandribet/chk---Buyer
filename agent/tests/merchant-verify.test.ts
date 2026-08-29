@@ -15,7 +15,7 @@ import { ChainError } from "@/mandate/chain.js";
 import { closeCheckout } from "@/mandate/closed.js";
 import { policyHash } from "@/mandate/constraints.js";
 import { agente, impostor, merchant as merchantKeys, usuario } from "@/mandate/keys.js";
-import { signJwt, signKeyBinding } from "@/mandate/sdjwt.js";
+import { signJwt, signKeyBinding, verifyJwt } from "@/mandate/sdjwt.js";
 import type { MerchantPresentation, OpenCheckoutMandate } from "../../shared/ap2.js";
 import {
   borrador,
@@ -24,6 +24,8 @@ import {
   carritoConProveedorAjeno,
   IDENTIDAD,
   montar,
+  OTRA_TARJETA,
+  TARJETA,
 } from "./support/flow.js";
 
 /** Corre el camino completo y devuelve la presentación válida, para después romperla. */
@@ -34,6 +36,7 @@ async function presentacionValida(escena: Awaited<ReturnType<typeof montar>>, ca
       open: escena.issued.credential,
       disclosures: escena.issued.disclosures,
       merchantId: "distribuidora-norte",
+      paymentInstrument: TARJETA,
     },
     escena.authorizeDeps,
     escena.ctx,
@@ -57,8 +60,11 @@ describe("camino feliz", () => {
     expect(veredicto.ok).toBe(true);
     if (!veredicto.ok) return;
 
-    expect(veredicto.receipt.vct).toBe("receipt.checkout.1");
-    expect(veredicto.receipt.amount).toBe(3_700_000);
+    expect(veredicto.receipt.payload.vct).toBe("receipt.checkout.1");
+    expect(veredicto.receipt.payload.amount).toBe(3_700_000);
+    // El recibo viaja FIRMADO: sin la firma es un objeto que cualquiera pudo
+    // escribir, y no serviría como evidencia en una disputa.
+    expect(verifyJwt(veredicto.receipt.jwt, merchantKeys.publicKey)).not.toBeNull();
     expect(veredicto.checks.every((c) => c.passed)).toBe(true);
   });
 
@@ -159,6 +165,7 @@ describe("compra fuera del mandato", () => {
         open: escena.issued.credential,
         disclosures: escena.issued.disclosures,
         merchantId: "distribuidora-norte",
+        paymentInstrument: TARJETA,
       },
       escena.authorizeDeps,
       escena.ctx,
@@ -208,6 +215,7 @@ describe("compra fuera del mandato", () => {
       kbJwt: closed.kbJwt,
       disclosures: escena.issued.disclosures.filter((d) => d.claim === "razonSocial"),
       authorizationId: reserva.authorizationId,
+      paymentInstrument: TARJETA,
     });
 
     expect(veredicto.ok).toBe(false);
@@ -225,6 +233,7 @@ describe("compra fuera del mandato", () => {
         open: escena.issued.credential,
         disclosures: escena.issued.disclosures,
         merchantId: "distribuidora-norte",
+        paymentInstrument: TARJETA,
       },
       escena.authorizeDeps,
       escena.ctx,
@@ -244,6 +253,7 @@ describe("compra fuera del mandato", () => {
         open: escena.issued.credential,
         disclosures: escena.issued.disclosures,
         merchantId: "distribuidora-norte",
+        paymentInstrument: TARJETA,
       },
       escena.authorizeDeps,
       escena.ctx,
@@ -252,6 +262,64 @@ describe("compra fuera del mandato", () => {
     expect(result.status).toBe("refused");
     if (result.status !== "refused") return;
     expect(result.reason).toBe("constraint_violated");
+  });
+});
+
+describe("la tarjeta equivocada", () => {
+  it("el policy engine frena al agente que quiere pagar con otra tarjeta", async () => {
+    const escena = await montar();
+
+    const result = await authorize(
+      {
+        cart: { ...carrito(), mandateId: escena.issued.mandateId },
+        open: escena.issued.credential,
+        disclosures: escena.issued.disclosures,
+        merchantId: "distribuidora-norte",
+        // Otra tarjeta del MISMO humano. El mandato autoriza una sola.
+        paymentInstrument: OTRA_TARJETA,
+      },
+      escena.authorizeDeps,
+      escena.ctx,
+    );
+
+    expect(result.status).toBe("refused");
+    if (result.status !== "refused") return;
+    expect(result.reason).toBe("constraint_violated");
+    expect(result.detail).toContain("amex");
+  });
+
+  it("y si igual llega al vendedor, el vendedor la rechaza", async () => {
+    // Un mandato es "qué, cuánto, hasta cuándo Y CON QUÉ". Cambiar la tarjeta
+    // es salirse del mandato igual que comprar de más: el humano autorizó gastar
+    // de una cuenta concreta, no de cualquiera que tenga.
+    const escena = await montar();
+    const { presentation } = await presentacionValida(escena);
+
+    const veredicto = await escena.merchant.verify({
+      ...presentation,
+      paymentInstrument: OTRA_TARJETA,
+    });
+
+    expect(veredicto.ok).toBe(false);
+    if (veredicto.ok) return;
+    expect(veredicto.failure).toBe("constraint_violated");
+    expect(veredicto.detail).toContain("····0005");
+  });
+
+  it("no alcanza con clonar marca y últimos cuatro: se compara por token", async () => {
+    // Dos tarjetas distintas pueden terminar en 4242. Si el chequeo mirara los
+    // últimos dígitos, aceptaría por una coincidencia.
+    const escena = await montar();
+    const { presentation } = await presentacionValida(escena);
+
+    const veredicto = await escena.merchant.verify({
+      ...presentation,
+      paymentInstrument: { ref: "pm_otra_distinta", brand: "visa", last4: "4242" },
+    });
+
+    expect(veredicto.ok).toBe(false);
+    if (veredicto.ok) return;
+    expect(veredicto.failure).toBe("constraint_violated");
   });
 });
 
@@ -361,6 +429,7 @@ describe("constraint desconocido", () => {
       kbJwt: closed.kbJwt,
       disclosures: [],
       authorizationId: reserva.authorizationId,
+      paymentInstrument: TARJETA,
     });
 
     expect(veredicto.ok).toBe(false);
@@ -433,6 +502,7 @@ describe("revocación", () => {
         open: escena.issued.credential,
         disclosures: escena.issued.disclosures,
         merchantId: "distribuidora-norte",
+        paymentInstrument: TARJETA,
       },
       escena.authorizeDeps,
       escena.ctx,
@@ -573,6 +643,7 @@ describe("el vendedor tampoco puede hacer trampa", () => {
         open: escena.issued.credential,
         disclosures: escena.issued.disclosures,
         merchantId: "distribuidora-norte",
+        paymentInstrument: TARJETA,
       },
       escena.authorizeDeps,
       escena.ctx,
@@ -633,7 +704,7 @@ describe("presupuesto acumulado", () => {
 
     const cart = { ...carrito(), mandateId: escena.issued.mandateId };
     const primera = await authorize(
-      { cart, open: escena.issued.credential, disclosures: escena.issued.disclosures, merchantId: "distribuidora-norte" },
+      { cart, open: escena.issued.credential, disclosures: escena.issued.disclosures, merchantId: "distribuidora-norte", paymentInstrument: TARJETA },
       escena.authorizeDeps,
       escena.ctx,
     );
@@ -641,7 +712,7 @@ describe("presupuesto acumulado", () => {
 
     // Segunda compra idéntica: entra en el techo por operación y no en el saldo.
     const segunda = await authorize(
-      { cart, open: escena.issued.credential, disclosures: escena.issued.disclosures, merchantId: "distribuidora-norte" },
+      { cart, open: escena.issued.credential, disclosures: escena.issued.disclosures, merchantId: "distribuidora-norte", paymentInstrument: TARJETA },
       escena.authorizeDeps,
       escena.ctx,
     );

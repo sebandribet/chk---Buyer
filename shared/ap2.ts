@@ -47,6 +47,7 @@ export type Base64Url = string;
 export type Constraint =
   | AllowedMerchantsConstraint
   | AllowedCategoriesConstraint
+  | AllowedPaymentInstrumentsConstraint
   | MaxAmountConstraint
   | MaxDeliveryDaysConstraint;
 
@@ -86,6 +87,38 @@ export interface MaxAmountConstraint {
 export interface MaxDeliveryDaysConstraint {
   type: "checkout.max_delivery_days";
   days: number;
+}
+
+/**
+ * Con qué se puede pagar.
+ *
+ * **`ref` es un token del proveedor de pagos, nunca un número de tarjeta.** Eso
+ * es exactamente lo que quiere decir autorizar a un agente "sin entregarle la
+ * tarjeta": el humano registra el medio de pago una sola vez, contra el
+ * proveedor, y lo que existe de ahí en adelante es una referencia opaca que no
+ * sirve para nada fuera de este circuito. El agente nunca ve el PAN, y nosotros
+ * tampoco — es la diferencia entre delegar el gasto y entregar la billetera.
+ *
+ * `brand` y `last4` viajan porque el humano tiene que poder ver QUÉ tarjeta
+ * está autorizando antes de firmar. "Visa ····4242" es identificable para el
+ * dueño y no le sirve a nadie más.
+ *
+ * Va como constraint y no como campo suelto del mandato para que entre al
+ * `policyHash`: cambiar la tarjeta autorizada cambia el compromiso, y por lo
+ * tanto exige una firma nueva.
+ */
+export interface AllowedPaymentInstrumentsConstraint {
+  type: "checkout.allowed_payment_instruments";
+  allowed: PaymentInstrumentRef[];
+}
+
+export interface PaymentInstrumentRef {
+  /** Token del proveedor (`pm_...` en Stripe). Nunca un PAN. */
+  ref: string;
+  /** "visa", "mastercard", "amex"… */
+  brand: string;
+  /** Los últimos cuatro dígitos. Lo que muestra cualquier recibo. */
+  last4: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +325,28 @@ export interface MerchantPresentation {
    * la misma idea que el token delegado de ACP, con el contrato de registro.
    */
   authorizationId: string;
+  /**
+   * Con qué se va a pagar. El agente lo DECLARA acá y el vendedor comprueba
+   * que sea uno de los que el mandato autoriza, antes de aceptar. Después el
+   * cobro queda atado a este mismo instrumento.
+   *
+   * Declararlo antes y no después no es un detalle: si el vendedor se enterara
+   * del medio de pago recién al cobrar, ya habría aceptado la compra.
+   */
+  paymentInstrument: PaymentInstrumentRef;
+}
+
+/**
+ * Todo lo que se evalúa contra los límites del mandato.
+ *
+ * Existe porque un límite no restringe sólo el carrito: `max_amount` mira el
+ * carrito, pero `allowed_payment_instruments` mira con qué se paga, y mañana
+ * otro mirará otra cosa. Pasar un contexto en vez de un `CheckoutObject` deja
+ * que el evaluador crezca sin cambiarle la firma a todos los que ya existen.
+ */
+export interface PurchaseContext {
+  checkout: CheckoutObject;
+  paymentInstrument: PaymentInstrumentRef;
 }
 
 /** Un credencial firmado en formato JWT compacto, con el payload ya parseado. */
@@ -328,7 +383,19 @@ export interface VerificationCheck {
 }
 
 export type VerificationResult =
-  | { ok: true; checks: VerificationCheck[]; buyer: Partial<BuyerProfile>; receipt: CheckoutReceipt }
+  | {
+      ok: true;
+      checks: VerificationCheck[];
+      buyer: Partial<BuyerProfile>;
+      /**
+       * El recibo FIRMADO, no sólo su contenido.
+       *
+       * La firma es lo único que lo convierte en evidencia: sin ella, el recibo
+       * es un objeto que cualquiera pudo escribir. Es exactamente lo que hay que
+       * presentar cuando el titular desconoce la compra.
+       */
+      receipt: SignedCredential<CheckoutReceipt>;
+    }
   | { ok: false; failure: VerificationFailure; detail: string; checks: VerificationCheck[] };
 
 /**

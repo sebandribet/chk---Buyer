@@ -11,10 +11,12 @@
     "demo": "tsx --env-file-if-exists=.env src/cli/demo.ts",
     "demo:mandate": "tsx src/cli/mandate-demo.ts",
     "record": "LLM_MODE=record tsx --env-file-if-exists=.env src/cli/record.ts",
-    "scrape": "tsx --env-file-if-exists=.env src/cli/scrape.ts"
+    "scrape": "tsx --env-file-if-exists=.env src/cli/scrape.ts",
+    "demo:stripe": "tsx --env-file-if-exists=.env src/cli/stripe-demo.ts"
   },
   "dependencies": {
     "openai": "^4.77.0",
+    "stripe": "^22.6.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

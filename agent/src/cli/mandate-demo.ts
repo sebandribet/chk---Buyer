@@ -22,7 +22,21 @@ import { confirmMandate } from "@/mandate/open.js";
 import { withheldFor } from "@/mandate/present.js";
 import { signJwt } from "@/mandate/sdjwt.js";
 import { Merchant } from "@/merchant/index.js";
-import type { BuyerProfile, MerchantPresentation, VerificationResult } from "../../../shared/ap2.js";
+import type {
+  BuyerProfile,
+  MerchantPresentation,
+  PaymentInstrumentRef,
+  VerificationResult,
+} from "../../../shared/ap2.js";
+
+/**
+ * La tarjeta del comprador, como token.
+ *
+ * `pm_...` es lo que devuelve Stripe después de que el humano carga la tarjeta
+ * una sola vez. Nunca vemos el número: el agente autoriza contra esta
+ * referencia y nada más. Eso es "sin entregarle la tarjeta al agente".
+ */
+const TARJETA: PaymentInstrumentRef = { ref: "pm_demo_visa_4242", brand: "visa", last4: "4242" };
 
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
@@ -177,6 +191,7 @@ async function agenteMalicioso(escena: Escena): Promise<MerchantPresentation> {
     kbJwt: closed.kbJwt,
     disclosures: escena.issued.disclosures.filter((d) => d.claim !== "contactoEmail"),
     authorizationId: reserva.authorizationId,
+    paymentInstrument: TARJETA,
   };
 }
 
@@ -223,7 +238,7 @@ async function main(): Promise<void> {
   paso(2, "El humano confirma y firma", "humano · clave del usuario");
   const issued = await confirmMandate(
     ataque === "categoria-prohibida" ? { ...BORRADOR, allowedCategories: ["alimentos"] } : BORRADOR,
-    { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS" },
+    { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS", paymentInstruments: [TARJETA] },
     PERFIL,
     { registry: chain, userKey: usuario, agentKey: agente, clock, supplierNames: { "distribuidora-norte": "Distribuidora Norte" } },
   );
@@ -259,7 +274,13 @@ async function main(): Promise<void> {
       : carrito();
 
   const result = await authorize(
-    { cart: { ...cart, mandateId: issued.mandateId }, open: issued.credential, disclosures: issued.disclosures, merchantId: "distribuidora-norte" },
+    {
+      cart: { ...cart, mandateId: issued.mandateId },
+      open: issued.credential,
+      disclosures: issued.disclosures,
+      merchantId: "distribuidora-norte",
+      paymentInstrument: TARJETA,
+    },
     { authorizations: chain, checkout: merchant, agentKey: agente, merchantPublicKey: merchantKeys.publicKey, clock },
     ctx,
   );
@@ -313,9 +334,10 @@ async function verificar(
 
 function imprimirVeredicto(veredicto: VerificationResult): void {
   if (veredicto.ok) {
+    const recibo = veredicto.receipt.payload;
     console.log(`\n${GREEN}${BOLD}ACEPTADA${RESET} — recibo firmado por el vendedor`);
-    console.log(`   ${DIM}reference ${corto(veredicto.receipt.reference, 24)} (hash de la compra)${RESET}`);
-    console.log(`   ${DIM}${ars(veredicto.receipt.amount)} ${veredicto.receipt.currency} · ${veredicto.receipt.acceptedAt}${RESET}`);
+    console.log(`   ${DIM}reference ${corto(recibo.reference, 24)} (hash de la compra)${RESET}`);
+    console.log(`   ${DIM}${ars(recibo.amount)} ${recibo.currency} · ${recibo.acceptedAt}${RESET}`);
     console.log(`\n   ${BOLD}A quién le factura:${RESET}`);
     for (const [k, v] of Object.entries(veredicto.buyer)) {
       console.log(`   ${DIM}${k.padEnd(18)}${RESET} ${v}`);
@@ -367,7 +389,7 @@ async function aplicarAtaque(
     case "mandato-cruzado": {
       const amplio = await confirmMandate(
         { ...BORRADOR, allowedCategories: ["alimentos", "limpieza", "equipamiento"], suggestedMaxPerPurchaseArs: 400_000 },
-        { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS" },
+        { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS", paymentInstruments: [TARJETA] },
         PERFIL,
         { registry: escena.chain, userKey: usuario, agentKey: agente, clock: escena.clock },
       );

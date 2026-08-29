@@ -17,7 +17,7 @@ import { policyHash, toMinorUnits } from "@/mandate/constraints.js";
 import { agente, impostor, usuario } from "@/mandate/keys.js";
 import { confirmMandate, type MandateIdentity } from "@/mandate/open.js";
 import { fromConfirmationKey, signJwt, verifyJwt } from "@/mandate/sdjwt.js";
-import type { BuyerProfile, OpenCheckoutMandate } from "../../shared/ap2.js";
+import type { BuyerProfile, OpenCheckoutMandate, PaymentInstrumentRef } from "../../shared/ap2.js";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -30,11 +30,14 @@ const perfil: BuyerProfile = {
   contactoTelefono: "+54 11 4567-8901",
 };
 
+const tarjeta: PaymentInstrumentRef = { ref: "pm_test_visa_4242", brand: "visa", last4: "4242" };
+
 const identidad: MandateIdentity = {
   owner: "0xCAFEDELSUR",
   agent: "0xAGENTE",
   paymentDelegate: "0xDELEGADO",
   currency: "ARS",
+  paymentInstruments: [tarjeta],
 };
 
 function borrador(overrides: Partial<MandateDraft> = {}): MandateDraft {

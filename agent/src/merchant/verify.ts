@@ -236,7 +236,14 @@ export async function verifyPresentation(
   // 9. Los límites del humano, re-evaluados acá
   // -------------------------------------------------------------------------
 
-  const verdict = evaluateConstraints(open.constraints, checkout);
+  // El instrumento con el que se va a pagar es parte de lo que se evalúa: el
+  // mandato no sólo dice qué se puede comprar y por cuánto, también con qué. Un
+  // agente que compra lo correcto con una tarjeta que el humano no autorizó
+  // está fuera del mandato igual que uno que compra de más.
+  const verdict = evaluateConstraints(open.constraints, {
+    checkout,
+    paymentInstrument: presentation.paymentInstrument,
+  });
   for (const e of verdict.evaluations) {
     checks.push({ check: `limite:${e.type}`, passed: e.passed, detail: e.detail });
   }
@@ -366,6 +373,6 @@ export async function verifyPresentation(
       },
       deps.merchantKey,
       deps.clock,
-    ).payload,
+    ),
   };
 }

@@ -14,7 +14,13 @@ import { agente, merchant as merchantKeys, usuario } from "@/mandate/keys.js";
 import { confirmMandate, type IssuedMandate, type MandateIdentity } from "@/mandate/open.js";
 import { Merchant } from "@/merchant/index.js";
 import type { MandateDraft } from "@/contracts/index.js";
-import type { BuyerProfile } from "../../../shared/ap2.js";
+import type { BuyerProfile, PaymentInstrumentRef } from "../../../shared/ap2.js";
+
+/** La tarjeta autorizada. Token del proveedor, nunca un PAN. */
+export const TARJETA: PaymentInstrumentRef = { ref: "pm_test_visa_4242", brand: "visa", last4: "4242" };
+
+/** Otra tarjeta del mismo humano, que el mandato NO autoriza. */
+export const OTRA_TARJETA: PaymentInstrumentRef = { ref: "pm_test_amex_0005", brand: "amex", last4: "0005" };
 
 export const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -32,6 +38,7 @@ export const IDENTIDAD: MandateIdentity = {
   agent: "0xAGENTE",
   paymentDelegate: "0xDELEGADO",
   currency: "ARS",
+  paymentInstruments: [TARJETA],
 };
 
 const PROVEEDOR: Supplier = {

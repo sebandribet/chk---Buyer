@@ -17,7 +17,22 @@ import {
   policyHash,
   toMinorUnits,
 } from "@/mandate/constraints.js";
-import type { CheckoutObject, Constraint } from "../../shared/ap2.js";
+import type { CheckoutObject, Constraint, PaymentInstrumentRef } from "../../shared/ap2.js";
+
+const TARJETA: PaymentInstrumentRef = { ref: "pm_visa_4242", brand: "visa", last4: "4242" };
+const OTRA: PaymentInstrumentRef = { ref: "pm_amex_0005", brand: "amex", last4: "0005" };
+
+/**
+ * El contexto que se evalúa: el carrito MÁS con qué se paga.
+ *
+ * Los límites no restringen sólo lo que se compra. `max_amount` mira el
+ * carrito, `allowed_payment_instruments` mira la tarjeta, y los dos son
+ * igual de parte del mandato.
+ */
+const compra = (c: CheckoutObject, instrumento: PaymentInstrumentRef = TARJETA) => ({
+  checkout: c,
+  paymentInstrument: instrumento,
+});
 
 function checkout(overrides: Partial<CheckoutObject> = {}): CheckoutObject {
   const items = overrides.items ?? [
@@ -52,6 +67,7 @@ const base: Constraint[] = buildConstraints({
   maxPerOperationArs: 50_000,
   maxTotalArs: 500_000,
   maxDeliveryDays: 3,
+  paymentInstruments: [TARJETA],
 });
 
 describe("conversión de plata", () => {
@@ -71,7 +87,7 @@ describe("conversión de plata", () => {
 
 describe("camino feliz", () => {
   it("acepta un carrito que respeta todos los límites", () => {
-    const verdict = evaluateConstraints(base, checkout());
+    const verdict = evaluateConstraints(base, compra(checkout()));
 
     expect(verdict.passed).toBe(true);
     expect(verdict.unknownType).toBe(false);
@@ -82,7 +98,7 @@ describe("camino feliz", () => {
     // Carrito que viola categoría Y monto Y entrega, todo junto.
     const verdict = evaluateConstraints(
       base,
-      checkout({
+      compra(checkout({
         deliveryDays: 9,
         items: [
           {
@@ -95,7 +111,7 @@ describe("camino feliz", () => {
             lineAmount: 42_000_000,
           },
         ],
-      }),
+      })),
     );
 
     // Quien audita esto quiere ver los tres, no sólo el primero que saltó.
@@ -111,7 +127,7 @@ describe("camino feliz", () => {
 describe("constraint desconocido", () => {
   it("falla, en vez de ignorarse", () => {
     const conBasura = [...base, { type: "checkout.inventado", loQueSea: true } as unknown as Constraint];
-    const verdict = evaluateConstraints(conBasura, checkout());
+    const verdict = evaluateConstraints(conBasura, compra(checkout()));
 
     expect(verdict.passed).toBe(false);
     expect(verdict.unknownType).toBe(true);
@@ -121,7 +137,7 @@ describe("constraint desconocido", () => {
     // El ataque: agregar ruido esperando que el verificador se rinda y acepte.
     const verdict = evaluateConstraints(
       [{ type: "checkout.sin_limites" } as unknown as Constraint],
-      checkout({ amount: 999_999_999 }),
+      compra(checkout({ amount: 999_999_999 })),
     );
 
     expect(verdict.passed).toBe(false);
@@ -132,7 +148,7 @@ describe("proveedores", () => {
   it("rechaza un vendedor fuera de la lista", () => {
     const verdict = evaluateConstraints(
       base,
-      checkout({ merchant: { id: "mayorista-random", name: "Mayorista Random" } }),
+      compra(checkout({ merchant: { id: "mayorista-random", name: "Mayorista Random" } })),
     );
 
     expect(verdict.passed).toBe(false);
@@ -146,7 +162,7 @@ describe("proveedores", () => {
     // cualquier lado. Mirar sólo el vendedor del carrito dejaría pasar eso.
     const verdict = evaluateConstraints(
       base,
-      checkout({
+      compra(checkout({
         items: [
           {
             sku: "CAFE-1KG",
@@ -158,7 +174,7 @@ describe("proveedores", () => {
             lineAmount: 1_850_000,
           },
         ],
-      }),
+      })),
     );
 
     expect(verdict.passed).toBe(false);
@@ -172,20 +188,21 @@ describe("proveedores", () => {
       maxPerOperationArs: 50_000,
       maxTotalArs: 500_000,
       maxDeliveryDays: null,
+      paymentInstruments: [TARJETA],
     });
     expect(sinLimite.some((c) => c.type === "checkout.allowed_merchants")).toBe(false);
-    expect(evaluateConstraints(sinLimite, checkout()).passed).toBe(true);
+    expect(evaluateConstraints(sinLimite, compra(checkout())).passed).toBe(true);
 
     // Lista vacía = ninguno. Es el opuesto exacto de la ausencia, y es a
     // propósito: una lista que quedó vacía por error tiene que cerrar, no abrir.
     const listaVacia: Constraint[] = [{ type: "checkout.allowed_merchants", allowed: [] }];
-    expect(evaluateConstraints(listaVacia, checkout()).passed).toBe(false);
+    expect(evaluateConstraints(listaVacia, compra(checkout())).passed).toBe(false);
   });
 });
 
 describe("monto", () => {
   it("rechaza un carrito por encima del techo por operación", () => {
-    const verdict = evaluateConstraints(base, checkout({ amount: 5_000_001 }));
+    const verdict = evaluateConstraints(base, compra(checkout({ amount: 5_000_001 })));
     expect(verdict.passed).toBe(false);
   });
 
@@ -194,7 +211,7 @@ describe("monto", () => {
     // lleva $420.000, y todos los demás chequeos pasan.
     const verdict = evaluateConstraints(
       base,
-      checkout({
+      compra(checkout({
         amount: 100,
         items: [
           {
@@ -207,7 +224,7 @@ describe("monto", () => {
             lineAmount: 42_000_000,
           },
         ],
-      }),
+      })),
     );
 
     expect(verdict.passed).toBe(false);
@@ -217,7 +234,7 @@ describe("monto", () => {
   });
 
   it("rechaza un carrito en otra moneda", () => {
-    expect(evaluateConstraints(base, checkout({ currency: "USD" })).passed).toBe(false);
+    expect(evaluateConstraints(base, compra(checkout({ currency: "USD" }))).passed).toBe(false);
   });
 });
 
@@ -234,6 +251,7 @@ describe("policyHash", () => {
       maxPerOperationArs: 50_001,
       maxTotalArs: 500_000,
       maxDeliveryDays: 3,
+      paymentInstruments: [TARJETA],
     });
 
     expect(policyHash(masCaro)).not.toBe(policyHash(base));
@@ -247,6 +265,7 @@ describe("policyHash", () => {
       maxPerOperationArs: 50_000,
       maxTotalArs: 500_000,
       maxDeliveryDays: 3,
+      paymentInstruments: [TARJETA],
     });
 
     expect(policyHash(conEquipamiento)).not.toBe(policyHash(base));

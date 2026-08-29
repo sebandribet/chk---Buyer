@@ -68,6 +68,40 @@ describe("el verificador del merchant es otro dominio de confianza", () => {
 
     expect(inesperados).toEqual([]);
   });
+
+  it("tampoco toca el cobro: verificar y cobrar son momentos distintos", async () => {
+    const archivos = await sourcesIn("merchant");
+
+    // El vendedor verifica que la compra está autorizada; el delegado de pago
+    // mueve la plata. Que sean dos pasos separados es lo que crea la ventana
+    // entre retener y cobrar, y esa ventana es donde la revocación en vivo
+    // todavía sirve. Un verificador que además cobrara la cerraría.
+    const violaciones = archivos.flatMap(({ path, code }) =>
+      importsOf(code)
+        .filter((i) => i.startsWith("@/payments/") || i.startsWith("@/settlement/"))
+        .map((i) => `${path} → ${i}`),
+    );
+
+    expect(violaciones).toEqual([]);
+  });
+});
+
+describe("el agente no cobra", () => {
+  it("nada de agent/ toca el puerto de pagos", async () => {
+    const archivos = await sourcesIn("agent");
+
+    // El agente descubre, compara y propone. Reservar presupuesto ya es de otro
+    // (`authorize.ts`, el policy engine) y mover plata es de un tercero (el
+    // delegado de pago). Tres actores, tres capacidades, y ninguna se le
+    // concede al que razona con un modelo de lenguaje.
+    const violaciones = archivos.flatMap(({ path, code }) =>
+      importsOf(code)
+        .filter((i) => i.startsWith("@/payments/") || i.startsWith("@/settlement/"))
+        .map((i) => `${path} → ${i}`),
+    );
+
+    expect(violaciones).toEqual([]);
+  });
 });
 
 describe("el agente no alcanza el lado de escritura", () => {

@@ -32,6 +32,7 @@ import type {
   Disclosure,
   MerchantPresentation,
   OpenCheckoutMandate,
+  PaymentInstrumentRef,
   SignedCredential,
 } from "../../../shared/ap2.js";
 import { evaluateConstraints, toMinorUnits, type ConstraintEvaluation } from "@/mandate/constraints.js";
@@ -67,6 +68,13 @@ export interface AuthorizeInput {
   /** Todas las del comprador. Acá se filtra cuáles viajan. */
   disclosures: Disclosure[];
   merchantId: string;
+  /**
+   * Con qué se va a pagar. Se declara ANTES de reservar, no después de cobrar.
+   *
+   * El agente lo elige entre los que el mandato autoriza, y si elige mal la
+   * re-evaluación de límites lo frena acá mismo, antes de comprometer plata.
+   */
+  paymentInstrument: PaymentInstrumentRef;
   purpose?: DisclosurePurpose;
 }
 
@@ -226,7 +234,10 @@ export async function authorize(
   });
 
   // 3. Los límites del mandato firmado, re-evaluados contra el carrito real.
-  const verdict = evaluateConstraints(open.constraints, checkout);
+  const verdict = evaluateConstraints(open.constraints, {
+    checkout,
+    paymentInstrument: input.paymentInstrument,
+  });
   for (const e of verdict.evaluations) {
     ctx.audit.emit({ type: "policy_check", check: e.type, passed: e.passed, detail: e.detail });
   }
@@ -307,6 +318,7 @@ export async function authorize(
       kbJwt: closed.kbJwt,
       disclosures,
       authorizationId,
+      paymentInstrument: input.paymentInstrument,
     },
   };
 }

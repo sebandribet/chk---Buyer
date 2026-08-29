@@ -25,9 +25,10 @@
  */
 
 import type {
-  CheckoutObject,
   Constraint,
   MerchantRef,
+  PaymentInstrumentRef,
+  PurchaseContext,
 } from "../../../shared/ap2.js";
 import { hashObject } from "./sdjwt.js";
 
@@ -76,7 +77,7 @@ export interface ConstraintEvaluation {
 const ok = (type: string, detail: string): ConstraintEvaluation => ({ type, passed: true, detail });
 const fail = (type: string, detail: string): ConstraintEvaluation => ({ type, passed: false, detail });
 
-type Evaluator = (constraint: Constraint, checkout: CheckoutObject) => ConstraintEvaluation;
+type Evaluator = (constraint: Constraint, purchase: PurchaseContext) => ConstraintEvaluation;
 
 /**
  * El registro. Cerrado a propósito.
@@ -89,7 +90,7 @@ type Evaluator = (constraint: Constraint, checkout: CheckoutObject) => Constrain
  * termine autorizando todo.
  */
 const EVALUATORS: Record<Constraint["type"], Evaluator> = {
-  "checkout.allowed_merchants": (constraint, checkout) => {
+  "checkout.allowed_merchants": (constraint, { checkout }) => {
     if (constraint.type !== "checkout.allowed_merchants") return fail(constraint.type, "Evaluador mal ruteado.");
     const permitidos = new Set(constraint.allowed.map((m) => m.id));
 
@@ -110,7 +111,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     return ok(constraint.type, `Vendedor y proveedores dentro de la lista (${checkout.merchant.id}).`);
   },
 
-  "checkout.allowed_categories": (constraint, checkout) => {
+  "checkout.allowed_categories": (constraint, { checkout }) => {
     if (constraint.type !== "checkout.allowed_categories") return fail(constraint.type, "Evaluador mal ruteado.");
     const permitidas = new Set(constraint.allowed);
     const fuera = [...new Set(checkout.items.map((i) => i.category))].filter((c) => !permitidas.has(c));
@@ -125,7 +126,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     return ok(constraint.type, `Todas las categorías habilitadas (${[...permitidas].join(", ")}).`);
   },
 
-  "checkout.max_amount": (constraint, checkout) => {
+  "checkout.max_amount": (constraint, { checkout }) => {
     if (constraint.type !== "checkout.max_amount") return fail(constraint.type, "Evaluador mal ruteado.");
 
     if (checkout.currency !== constraint.currency) {
@@ -163,7 +164,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     );
   },
 
-  "checkout.max_delivery_days": (constraint, checkout) => {
+  "checkout.max_delivery_days": (constraint, { checkout }) => {
     if (constraint.type !== "checkout.max_delivery_days") return fail(constraint.type, "Evaluador mal ruteado.");
 
     if (checkout.deliveryDays > constraint.days) {
@@ -174,6 +175,31 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     }
 
     return ok(constraint.type, `Entrega en ${checkout.deliveryDays} días, dentro de los ${constraint.days} del mandato.`);
+  },
+
+  /**
+   * Con qué se paga.
+   *
+   * Se compara SÓLO por `ref`, que es el token del proveedor. `brand` y `last4`
+   * están para que un humano reconozca la tarjeta, no para autorizar con ellos:
+   * dos tarjetas distintas pueden terminar en 4242, y aceptar por los últimos
+   * cuatro dígitos sería aceptar por una coincidencia.
+   */
+  "checkout.allowed_payment_instruments": (constraint, { paymentInstrument }) => {
+    if (constraint.type !== "checkout.allowed_payment_instruments") {
+      return fail(constraint.type, "Evaluador mal ruteado.");
+    }
+
+    const autorizado = constraint.allowed.find((i) => i.ref === paymentInstrument.ref);
+    if (autorizado === undefined) {
+      const lista = constraint.allowed.map((i) => `${i.brand} ····${i.last4}`).join(", ");
+      return fail(
+        constraint.type,
+        `Se paga con ${paymentInstrument.brand} ····${paymentInstrument.last4}, que el mandato no autoriza (habilitadas: ${lista || "ninguna"}).`,
+      );
+    }
+
+    return ok(constraint.type, `Se paga con ${autorizado.brand} ····${autorizado.last4}, autorizada en el mandato.`);
   },
 };
 
@@ -193,7 +219,7 @@ export interface ConstraintsVerdict {
  */
 export function evaluateConstraints(
   constraints: readonly Constraint[],
-  checkout: CheckoutObject,
+  purchase: PurchaseContext,
 ): ConstraintsVerdict {
   const evaluations: ConstraintEvaluation[] = [];
   let unknownType = false;
@@ -212,7 +238,7 @@ export function evaluateConstraints(
       continue;
     }
 
-    evaluations.push(evaluator(constraint, checkout));
+    evaluations.push(evaluator(constraint, purchase));
   }
 
   return { passed: evaluations.every((e) => e.passed), unknownType, evaluations };
@@ -251,6 +277,15 @@ export interface ConstraintsInput {
   maxPerOperationArs: number;
   maxTotalArs: number;
   maxDeliveryDays: number | null;
+  /**
+   * Con qué se puede pagar.
+   *
+   * A diferencia de los proveedores, acá NO hay opción de "cualquiera": un
+   * mandato sin medio de pago no puede comprar nada, así que el constraint
+   * siempre está. Un mandato que autorizara pagar con cualquier tarjeta del
+   * humano sería, justamente, entregarle la billetera al agente.
+   */
+  paymentInstruments: PaymentInstrumentRef[];
 }
 
 /**
@@ -268,6 +303,10 @@ export function buildConstraints(input: ConstraintsInput): Constraint[] {
       currency: input.currency,
       maxPerOperation: toMinorUnits(input.maxPerOperationArs),
       maxTotal: toMinorUnits(input.maxTotalArs),
+    },
+    {
+      type: "checkout.allowed_payment_instruments",
+      allowed: [...input.paymentInstruments].sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0)),
     },
   ];
 
