@@ -8,12 +8,13 @@
     "build": "vite build",
     "start": "node server/index.js",
     "test": "npm run test:contracts && npm run test:mandates && npm run test:agent && npm run build",
-    "test:contracts": "node --test test/MandateVault.test.js",
+    "test:contracts": "node --test test/*.test.js",
     "test:mandates": "forge test",
     "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.24",
+    "ethers": "^6.16.0",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "pino": "^9.7.0",
@@ -25,7 +26,6 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "emittery": "0.10.0",
-    "ethers": "^6.16.0",
     "ganache": "^7.9.2",
     "solc": "0.8.24",
     "vite": "^6.0.7"
