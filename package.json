@@ -8,5 +8,27 @@
     "ethers": "^6.16.0",
     "ganache": "^7.9.2",
     "solc": "0.8.24"
+  "name": "chk-buyer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"node --watch server/index.js\"",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "pino": "^9.7.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "vite": "^6.0.7"
   }
 }

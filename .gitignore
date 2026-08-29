@@ -1,2 +1,20 @@
 node_modules/
 coverage/
+# JavaScript dependencies and reports
+node_modules/
+coverage/
+
+# Foundry build artifacts
+out/
+cache/
+
+# Local application credentials and environment values
+.baileys-auth/
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.baileys-auth/
+.env
+*.docx
