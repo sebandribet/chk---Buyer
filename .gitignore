@@ -1,3 +1,5 @@
+node_modules/
+coverage/
 # JavaScript dependencies and reports
 node_modules/
 coverage/
