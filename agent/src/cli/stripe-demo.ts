@@ -18,6 +18,7 @@ import { authorize } from "@/agent/authorize.js";
 import { toOffer, type CartDraft, type MandateDraft, type NeedSpec, type Product, type Supplier } from "@/contracts/index.js";
 import { FakeMandateChain } from "@/mandate/chain.js";
 import { agente, merchant as merchantKeys, usuario } from "@/mandate/keys.js";
+import { confirmForm, editForm, openForReview, reviewSummary } from "@/mandate/form.js";
 import { confirmMandate } from "@/mandate/open.js";
 import { Merchant } from "@/merchant/index.js";
 import { FakeDisputePort, StripeDisputePort } from "@/payments/disputes.js";
@@ -151,9 +152,25 @@ async function main(): Promise<void> {
     : new StripePaymentPort({ secretKey: key, clock });
 
   // -------------------------------------------------------------------------
-  paso(1, "El humano firma el mandato", "humano · clave del usuario");
+  paso(1, "El agente redacta, el humano revisa y edita", "agente → humano");
+  console.log(`   ${DIM}el agente propone a partir de: "${PROMPT}"${RESET}`);
+
+  // El agente redacta el primer borrador —eso es lo que ahorra tiempo— pero
+  // quien decide es la persona. Acá el humano baja el presupuesto: el mandato
+  // que se firma es el suyo, no el que le propusieron.
+  const revisado = editForm(openForReview(BORRADOR), { suggestedBudgetArs: 300_000 });
+
+  for (const campo of reviewSummary(revisado)) {
+    const marca = campo.edited ? `${YELLOW}editado${RESET}` : `${DIM}como venía${RESET}`;
+    console.log(`   ${campo.edited ? YELLOW + "✎" : DIM + "·"}${RESET} ${campo.field.padEnd(30)} ${JSON.stringify(campo.value)}  ${marca}`);
+  }
+
+  const confirmado = confirmForm(revisado, clock.now());
+  console.log(`   ${GREEN}✓${RESET} confirmado por el humano ${DIM}(cambió: ${confirmado.review.editedFields.join(", ") || "nada"})${RESET}`);
+
+  paso(2, "El humano firma", "humano · clave del usuario");
   const issued = await confirmMandate(
-    BORRADOR,
+    confirmado,
     {
       owner: "0xCAFEDELSUR",
       agent: "0xAGENTE",
@@ -164,12 +181,12 @@ async function main(): Promise<void> {
     PERFIL,
     { registry: chain, userKey: usuario, agentKey: agente, clock, supplierNames: { "distribuidora-norte": "Distribuidora Norte" } },
   );
-  console.log(`   ${GREEN}✓${RESET} límites: alimentos/limpieza · hasta $60.000 por compra · $500.000 en total`);
+  console.log(`   ${GREEN}✓${RESET} límites firmados: alimentos/limpieza · $60.000 por compra · $300.000 en total`);
   console.log(`   ${GREEN}✓${RESET} medio de pago: ${BOLD}${tarjeta.brand} ····${tarjeta.last4}${RESET} ${DIM}(token ${corto(tarjeta.ref, 22)})${RESET}`);
   console.log(`   ${DIM}la tarjeta entra al mandato como TOKEN. Ni el agente ni nosotros vemos el número.${RESET}`);
 
   // -------------------------------------------------------------------------
-  paso(2, "El agente compra y el vendedor verifica", "agente · vendedor");
+  paso(3, "El agente compra y el vendedor verifica", "agente · vendedor");
   const merchant = new Merchant({
     ref: { id: "distribuidora-norte", name: "Distribuidora Norte" },
     key: merchantKeys,
@@ -204,7 +221,7 @@ async function main(): Promise<void> {
   console.log(`   ${GREEN}✓${RESET} reserva on-chain ${DIM}${corto(result.presentation.authorizationId)}${RESET}`);
 
   // -------------------------------------------------------------------------
-  paso(3, "Se retiene la plata — pero NO se mueve", `delegado de pago · ${pagos.provider}`);
+  paso(4, "Se retiene la plata — pero NO se mueve", `delegado de pago · ${pagos.provider}`);
   const settlement = new Settlement({
     payments: pagos,
     chain,
@@ -242,7 +259,7 @@ async function main(): Promise<void> {
     await chain.revokeMandate(issued.mandateId, "0xCAFEDELSUR");
   }
 
-  paso(4, "Se cobra", `delegado de pago · ${pagos.provider}`);
+  paso(5, "Se cobra", `delegado de pago · ${pagos.provider}`);
   const cobro = await settlement.capture(result.presentation.authorizationId, held.hold.holdRef);
 
   if (cobro.status !== "captured") {
@@ -265,7 +282,7 @@ async function main(): Promise<void> {
 
   // -------------------------------------------------------------------------
   if (conDisputa) {
-    paso(5, 'El titular dice "yo no autoricé esto"', "disputa");
+    paso(6, 'El titular dice "yo no autoricé esto"', "disputa");
 
     const disputas: DisputePort = offline
       ? new FakeDisputePort(clock)

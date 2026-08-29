@@ -18,6 +18,7 @@ import { FakeMandateChain } from "@/mandate/chain.js";
 import { fromMinorUnits } from "@/mandate/constraints.js";
 import { closeCheckout } from "@/mandate/closed.js";
 import { agente, impostor, merchant as merchantKeys, usuario } from "@/mandate/keys.js";
+import { confirmForm, editForm, openForReview, reviewSummary } from "@/mandate/form.js";
 import { confirmMandate } from "@/mandate/open.js";
 import { withheldFor } from "@/mandate/present.js";
 import { signJwt } from "@/mandate/sdjwt.js";
@@ -159,7 +160,10 @@ const ATAQUES: Record<Ataque, string> = {
  * su cuenta.
  */
 async function agenteMalicioso(escena: Escena): Promise<MerchantPresentation> {
-  const cart = carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipamiento", priceArs: 25_000 });
+  // El precio entra holgado en el techo por compra, a propósito: si se pasara,
+  // lo frenaría la chain y el escenario perdería su gracia. Lo único que está
+  // mal en esta compra es el RUBRO, y eso el contrato no lo puede ver.
+  const cart = carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipamiento", priceArs: 12_000 });
 
   const { checkout, nonce } = await escena.merchant.close(
     toCheckoutRequest(cart, "distribuidora-norte", "ARS"),
@@ -235,9 +239,25 @@ async function main(): Promise<void> {
   console.log(`   ${YELLOW}El agente puede redactarlo. No puede firmarlo.${RESET}`);
 
   // -------------------------------------------------------------------------
-  paso(2, "El humano confirma y firma", "humano · clave del usuario");
+  paso(2, "El humano revisa el formulario, edita y confirma", "humano");
+
+  const propuesto: MandateDraft =
+    ataque === "categoria-prohibida" ? { ...BORRADOR, allowedCategories: ["alimentos"] } : BORRADOR;
+
+  // El agente redacta; el humano decide. Acá recorta el techo por compra de
+  // $60.000 a $40.000: lo que se firma es su decisión, no lo que le propusieron.
+  const revisado = editForm(openForReview(propuesto), { suggestedMaxPerPurchaseArs: 40_000 });
+  for (const campo of reviewSummary(revisado)) {
+    console.log(
+      `   ${campo.edited ? YELLOW + "✎" : DIM + "·"}${RESET} ${campo.field.padEnd(30)} ${JSON.stringify(campo.value)}`,
+    );
+  }
+  const confirmado = confirmForm(revisado, clock.now());
+  console.log(`   ${DIM}editó: ${confirmado.review.editedFields.join(", ") || "nada — leyó y estuvo de acuerdo"}${RESET}`);
+
+  paso(3, "El humano firma", "humano · clave del usuario");
   const issued = await confirmMandate(
-    ataque === "categoria-prohibida" ? { ...BORRADOR, allowedCategories: ["alimentos"] } : BORRADOR,
+    confirmado,
     { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS", paymentInstruments: [TARJETA] },
     PERFIL,
     { registry: chain, userKey: usuario, agentKey: agente, clock, supplierNames: { "distribuidora-norte": "Distribuidora Norte" } },
@@ -260,13 +280,13 @@ async function main(): Promise<void> {
   // El agente comprometido no pasa por el policy engine: arma la presentación
   // él mismo. Por eso se bifurca acá y no en `aplicarAtaque`.
   if (ataque === "agente-malicioso") {
-    paso(3, "El agente compra FUERA de su mandato", "agente comprometido");
+    paso(4, "El agente compra FUERA de su mandato", "agente comprometido");
     const presentacion = await agenteMalicioso(escena);
-    await verificar(merchant, presentacion, ataque, 4);
+    await verificar(merchant, presentacion, ataque, 5);
     return;
   }
 
-  paso(3, "El agente compra dentro de esos límites", "agente · policy engine");
+  paso(4, "El agente compra dentro de esos límites", "agente · policy engine");
 
   const cart =
     ataque === "categoria-prohibida"
@@ -298,7 +318,7 @@ async function main(): Promise<void> {
   console.log(`   ${GREEN}✓${RESET} Closed Checkout Mandate ${DIM}(mandate.checkout.1), firmado por el agente${RESET}`);
 
   // -------------------------------------------------------------------------
-  paso(4, "Qué se le muestra al vendedor", "agente");
+  paso(5, "Qué se le muestra al vendedor", "agente");
   console.log(`   ${GREEN}revela${RESET}  ${result.presentation.disclosures.map((d) => d.claim).join(", ")}`);
   console.log(`   ${RED}oculta${RESET}  ${withheldFor("fulfillment", issued.disclosures).join(", ")}`);
   console.log(`   ${DIM}lo oculto queda comprometido en el mandato firmado: el vendedor sabe`);
@@ -314,7 +334,7 @@ async function verificar(
   merchant: Merchant,
   presentacion: MerchantPresentation,
   ataque: Ataque | undefined,
-  n = 5,
+  n = 6,
 ): Promise<void> {
   paso(n, "El vendedor verifica, sin confiar en el agente", "vendedor");
 
@@ -388,7 +408,14 @@ async function aplicarAtaque(
 
     case "mandato-cruzado": {
       const amplio = await confirmMandate(
-        { ...BORRADOR, allowedCategories: ["alimentos", "limpieza", "equipamiento"], suggestedMaxPerPurchaseArs: 400_000 },
+        confirmForm(
+          openForReview({
+            ...BORRADOR,
+            allowedCategories: ["alimentos", "limpieza", "equipamiento"],
+            suggestedMaxPerPurchaseArs: 400_000,
+          }),
+          escena.clock.now(),
+        ),
         { owner: "0xCAFEDELSUR", agent: "0xAGENTE", paymentDelegate: "0xDELEGADO", currency: "ARS", paymentInstruments: [TARJETA] },
         PERFIL,
         { registry: escena.chain, userKey: usuario, agentKey: agente, clock: escena.clock },

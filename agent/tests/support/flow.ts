@@ -11,6 +11,7 @@ import { FixedClock, SeqIds, createContext } from "@/agent/context.js";
 import { toOffer, type CartDraft, type CartLine, type NeedSpec, type Product, type Supplier } from "@/contracts/index.js";
 import { FakeMandateChain } from "@/mandate/chain.js";
 import { agente, merchant as merchantKeys, usuario } from "@/mandate/keys.js";
+import { confirmForm, editForm, openForReview } from "@/mandate/form.js";
 import { confirmMandate, type IssuedMandate, type MandateIdentity } from "@/mandate/open.js";
 import { Merchant } from "@/merchant/index.js";
 import type { MandateDraft } from "@/contracts/index.js";
@@ -163,12 +164,24 @@ export interface Escena {
   };
 }
 
-/** Monta todo: chain, mandato firmado, vendedor. Sin agente: eso lo pone cada test. */
-export async function montar(draft: MandateDraft = borrador()): Promise<Escena> {
+/**
+ * Monta todo: chain, mandato firmado, vendedor.
+ *
+ * Pasa por la revisión aunque sea un fixture, porque no hay otra forma: el
+ * mandato no se puede firmar sin que el humano confirme el formulario, y eso lo
+ * impone el tipo. Que los tests tampoco puedan saltearlo es la prueba de que la
+ * garantía es real.
+ */
+export async function montar(
+  draft: MandateDraft = borrador(),
+  edits: Partial<MandateDraft> = {},
+): Promise<Escena> {
   const clock = new FixedClock(NOW);
   const chain = new FakeMandateChain(clock);
 
-  const issued = await confirmMandate(draft, IDENTIDAD, PERFIL, {
+  const confirmado = confirmForm(editForm(openForReview(draft), edits), NOW);
+
+  const issued = await confirmMandate(confirmado, IDENTIDAD, PERFIL, {
     registry: chain,
     userKey: usuario,
     agentKey: agente,

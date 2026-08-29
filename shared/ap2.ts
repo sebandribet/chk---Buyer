@@ -112,6 +112,30 @@ export interface AllowedPaymentInstrumentsConstraint {
   allowed: PaymentInstrumentRef[];
 }
 
+/**
+ * El registro de que el humano revisó antes de firmar.
+ *
+ * La creación del mandato es responsabilidad del usuario. El agente redacta —eso
+ * es lo que ahorra tiempo— pero quien decide es la persona, y este objeto es la
+ * prueba de que decidió en vez de aceptar.
+ */
+export interface MandateReview {
+  /** Quién escribió el primer borrador. Hoy siempre el agente. */
+  draftedBy: "agent";
+  /**
+   * Hash canónico del borrador que el agente propuso.
+   *
+   * Prueba QUÉ se le puso adelante al humano. Con el borrador original en la
+   * mano, cualquiera puede comprobar que lo firmado sale de esa propuesta y no
+   * de otra que apareció después.
+   */
+  proposedHash: Base64Url;
+  /** Qué campos cambió el humano. Vacío es válido: leer y estar de acuerdo también es revisar. */
+  editedFields: string[];
+  /** Unix epoch en segundos. */
+  confirmedAt: number;
+}
+
 export interface PaymentInstrumentRef {
   /** Token del proveedor (`pm_...` en Stripe). Nunca un PAN. */
   ref: string;
@@ -210,6 +234,18 @@ export interface OpenCheckoutMandate {
   agent: string;
   /** Quién puede consumir la autorización de pago. */
   paymentDelegate: string;
+  /**
+   * Cómo llegó este mandato a existir.
+   *
+   * El agente redacta el borrador y el humano lo revisa, lo edita y lo firma.
+   * Que eso quede DENTRO del documento firmado convierte "el usuario aprobó" en
+   * algo verificable: no es que apretó un botón, es que se le propuso esto —el
+   * hash lo prueba—, cambió estos campos, y firmó el resultado.
+   *
+   * En una disputa es la diferencia entre un consentimiento discutible y uno que
+   * no se puede discutir.
+   */
+  review: MandateReview;
   /** Hashes de los campos del comprador. Sin sal no se pueden revertir. */
   _sd: Base64Url[];
   _sd_alg: "sha-256";

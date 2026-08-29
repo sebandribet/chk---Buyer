@@ -17,10 +17,10 @@
 import {
   ACTION_PURCHASE,
   type Clock,
-  type MandateDraft,
   type MandateRegistryPort,
   type MandateTerms,
 } from "@/contracts/index.js";
+import type { ConfirmedMandateForm } from "./form.js";
 import type {
   BuyerProfile,
   Constraint,
@@ -111,11 +111,15 @@ function toMerchantRefs(
  * límites que le muestran son los que el humano firmó, sin creerle a nadie.
  */
 export async function confirmMandate(
-  draft: MandateDraft,
+  confirmed: ConfirmedMandateForm,
   identity: MandateIdentity,
   profile: BuyerProfile,
   deps: ConfirmMandateDeps,
 ): Promise<IssuedMandate> {
+  // Sólo se firma un formulario que el humano ya revisó. No es una convención:
+  // `ConfirmedMandateForm` no se puede construir sin pasar por `confirmForm`,
+  // así que saltarse la revisión es un error de compilación.
+  const draft = confirmed.draft;
   const iat = nowSeconds(deps.clock);
   const exp =
     draft.expiresAt !== null
@@ -164,6 +168,8 @@ export async function confirmMandate(
     cnf: toConfirmationKey(deps.agentKey.publicKey),
     agent: identity.agent,
     paymentDelegate: identity.paymentDelegate,
+    // Va dentro de lo firmado: qué se le propuso al humano y qué cambió él.
+    review: confirmed.review,
     _sd,
     _sd_alg: "sha-256",
     iat,

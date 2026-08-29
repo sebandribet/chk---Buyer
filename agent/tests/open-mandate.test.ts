@@ -15,6 +15,7 @@ import { ACTION_PURCHASE, type MandateDraft } from "@/contracts/index.js";
 import { ChainError, FakeMandateChain } from "@/mandate/chain.js";
 import { policyHash, toMinorUnits } from "@/mandate/constraints.js";
 import { agente, impostor, usuario } from "@/mandate/keys.js";
+import { confirmForm, openForReview } from "@/mandate/form.js";
 import { confirmMandate, type MandateIdentity } from "@/mandate/open.js";
 import { fromConfirmationKey, signJwt, verifyJwt } from "@/mandate/sdjwt.js";
 import type { BuyerProfile, OpenCheckoutMandate, PaymentInstrumentRef } from "../../shared/ap2.js";
@@ -54,6 +55,17 @@ function borrador(overrides: Partial<MandateDraft> = {}): MandateDraft {
   };
 }
 
+/**
+ * El humano lee el borrador y lo confirma sin cambiar nada.
+ *
+ * Existe porque `confirmMandate` ya NO acepta un borrador suelto: hay que pasar
+ * por la revisión. Que estos tests tengan que hacerlo también es la prueba de
+ * que la garantía es del tipo y no de la disciplina de quien escribe el código.
+ */
+function revisadoSinCambios(draft: MandateDraft) {
+  return confirmForm(openForReview(draft), NOW);
+}
+
 function setup() {
   const clock = new FixedClock(NOW);
   const chain = new FakeMandateChain(clock);
@@ -67,7 +79,7 @@ function setup() {
 describe("confirmar el mandato", () => {
   it("produce una credencial que verifica con la clave del humano", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     const payload = verifyJwt<OpenCheckoutMandate>(issued.credential.jwt, usuario.publicKey);
     expect(payload).not.toBeNull();
@@ -79,7 +91,7 @@ describe("confirmar el mandato", () => {
 
   it("la credencial NO verifica con ninguna otra clave", async () => {
     const { deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     expect(verifyJwt(issued.credential.jwt, agente.publicKey)).toBeNull();
     expect(verifyJwt(issued.credential.jwt, impostor.publicKey)).toBeNull();
@@ -87,7 +99,7 @@ describe("confirmar el mandato", () => {
 
   it("el agente queda endosado en cnf: puede firmar compras, no mandatos", async () => {
     const { deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     const endosada = fromConfirmationKey(issued.credential.payload.cnf);
     expect(verifyJwt(signJwt({ x: 1 }, agente.privateKey).jwt, endosada)).toEqual({ x: 1 });
@@ -96,7 +108,7 @@ describe("confirmar el mandato", () => {
 
   it("el policyHash de la credencial es el mismo que quedó en el contrato", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     // Los tres tienen que coincidir: la credencial, el contrato, y lo que da
     // recomputar el hash sobre los constraints. Es la junta entre los dos
@@ -108,7 +120,7 @@ describe("confirmar el mandato", () => {
 
   it("los términos on-chain reflejan el borrador, en centavos", async () => {
     const { deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     expect(issued.terms).toMatchObject({
       agent: "0xAGENTE",
@@ -121,7 +133,7 @@ describe("confirmar el mandato", () => {
 
   it("los datos del comprador viajan hasheados, no en claro", async () => {
     const { deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     // El CUIT no puede aparecer en la credencial firmada: la credencial es
     // pública por definición, cualquiera que la reciba la puede leer.
@@ -142,7 +154,7 @@ describe("confirmar el mandato", () => {
 
   it("un borrador sin vencimiento no produce un mandato eterno", async () => {
     const { deps } = setup();
-    const issued = await confirmMandate(borrador({ expiresAt: null }), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador({ expiresAt: null })), identidad, perfil, deps);
 
     const dias = (issued.terms.expiresAt - issued.terms.validAfter) / 86_400;
     expect(dias).toBe(30);
@@ -151,15 +163,15 @@ describe("confirmar el mandato", () => {
   it("no firma un mandato que ya nació vencido", async () => {
     const { deps } = setup();
     await expect(
-      confirmMandate(borrador({ expiresAt: "2020-01-01T00:00:00.000Z" }), identidad, perfil, deps),
+      confirmMandate(revisadoSinCambios(borrador({ expiresAt: "2020-01-01T00:00:00.000Z" })), identidad, perfil, deps),
     ).rejects.toThrow(/fecha futura/);
   });
 
   it("sin límite de proveedor el constraint se omite, no se manda vacío", async () => {
     const { deps } = setup();
-    const abierto = await confirmMandate(borrador({ allowedSuppliers: null }), identidad, perfil, deps);
+    const abierto = await confirmMandate(revisadoSinCambios(borrador({ allowedSuppliers: null })), identidad, perfil, deps);
     const acotado = await confirmMandate(
-      borrador({ allowedSuppliers: ["distribuidora-norte"] }),
+      revisadoSinCambios(borrador({ allowedSuppliers: ["distribuidora-norte"] })),
       identidad,
       perfil,
       deps,
@@ -179,7 +191,7 @@ describe("el contrato rechaza términos inválidos", () => {
     // desincroniza, tiene que romper acá y no en el deploy.
     await expect(
       confirmMandate(
-        borrador({ suggestedBudgetArs: 10_000, suggestedMaxPerPurchaseArs: 60_000 }),
+        revisadoSinCambios(borrador({ suggestedBudgetArs: 10_000, suggestedMaxPerPurchaseArs: 60_000 })),
         identidad,
         perfil,
         deps,
@@ -190,7 +202,7 @@ describe("el contrato rechaza términos inválidos", () => {
   it("no acepta un techo por compra de cero", async () => {
     const { deps } = setup();
     await expect(
-      confirmMandate(borrador({ suggestedMaxPerPurchaseArs: 0 }), identidad, perfil, deps),
+      confirmMandate(revisadoSinCambios(borrador({ suggestedMaxPerPurchaseArs: 0 })), identidad, perfil, deps),
     ).rejects.toThrow(ChainError);
   });
 
@@ -218,7 +230,7 @@ describe("el contrato rechaza términos inválidos", () => {
 describe("revocación", () => {
   it("la próxima lectura ya ve el mandato muerto", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     expect((await chain.read(issued.mandateId)).active).toBe(true);
     await chain.revokeMandate(issued.mandateId, identidad.owner);
@@ -230,7 +242,7 @@ describe("revocación", () => {
 
   it("sólo el dueño puede revocar", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     // Ni el agente ni nadie más. Si el agente pudiera tocar esto, podría
     // revocar y volver a crear con límites más amplios.
@@ -239,7 +251,7 @@ describe("revocación", () => {
 
   it("revocar dos veces no rompe", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador(), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador()), identidad, perfil, deps);
 
     await chain.revokeMandate(issued.mandateId, identidad.owner);
     await expect(chain.revokeMandate(issued.mandateId, identidad.owner)).resolves.toBeUndefined();
@@ -250,7 +262,7 @@ describe("la vista que consume el agente", () => {
   it("combina el estado on-chain con la política que el hash compromete", async () => {
     const { chain, deps } = setup();
     const issued = await confirmMandate(
-      borrador({ allowedSuppliers: ["distribuidora-norte"] }),
+      revisadoSinCambios(borrador({ allowedSuppliers: ["distribuidora-norte"] })),
       identidad,
       perfil,
       deps,
@@ -268,7 +280,7 @@ describe("la vista que consume el agente", () => {
 
   it("sin constraint de proveedores la vista dice null, que es 'cualquiera'", async () => {
     const { chain, deps } = setup();
-    const issued = await confirmMandate(borrador({ allowedSuppliers: null }), identidad, perfil, deps);
+    const issued = await confirmMandate(revisadoSinCambios(borrador({ allowedSuppliers: null })), identidad, perfil, deps);
 
     expect((await chain.read(issued.mandateId)).allowedSuppliers).toBeNull();
   });
