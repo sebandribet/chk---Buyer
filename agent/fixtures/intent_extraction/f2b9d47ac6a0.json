@@ -1,0 +1,34 @@
+{
+  "op": "intent_extraction",
+  "user": "Si el litro de leche descremada baja de $1.300, comprá 20 litros",
+  "recordedAt": "2026-08-29T18:10:20.914Z",
+  "response": {
+    "status": "ok",
+    "commitment": "conditional",
+    "natural_language_description": "Si el litro de leche descremada baja de $1.300, comprá 20 litros",
+    "needs": [
+      {
+        "canonical": "leche",
+        "attrs": [
+          {
+            "key": "tipo",
+            "value": "descremada"
+          }
+        ],
+        "qty": 20,
+        "unit": "L",
+        "substitutes_allowed": false
+      }
+    ],
+    "constraints": {
+      "budget_ars": null,
+      "allowed_categories": [],
+      "forbidden_categories": [],
+      "allowed_suppliers": null,
+      "max_delivery_days": null
+    },
+    "intent_expiry": null,
+    "user_cart_confirmation_required": false,
+    "questions": []
+  }
+}
