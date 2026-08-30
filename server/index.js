@@ -9,12 +9,14 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import QRCode from "qrcode";
+import { DemoChain, errorMessage } from "./demoChain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, "../dist");
 const authDirectory = path.resolve(__dirname, "../.baileys-auth");
 const app = express();
 const port = process.env.PORT || 3001;
+const demoChain = new DemoChain();
 
 const whatsapp = {
   socket: null,
@@ -124,6 +126,90 @@ async function disconnectWhatsapp() {
 
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
+});
+
+function demoError(response, error) {
+  response.status(422).json({ error: errorMessage(error) });
+}
+
+app.post("/api/demo/reset", async (request, response) => {
+  try {
+    response.json(await demoChain.reset(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.get("/api/demo/state", async (_request, response) => {
+  try {
+    response.json(await demoChain.state());
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/kyc/login", async (_request, response) => {
+  try {
+    response.json(await demoChain.loginAndEnrollBuyer());
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/mandate", async (request, response) => {
+  try {
+    response.status(201).json(await demoChain.createMandate(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/agent/purchase", async (request, response) => {
+  try {
+    response.status(201).json(await demoChain.reservePurchase(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.get("/api/demo/merchant/verify/:purchaseId", async (request, response) => {
+  try {
+    response.json(await demoChain.verifyPurchase(request.params.purchaseId));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/merchant/capture/:purchaseId", async (request, response) => {
+  try {
+    response.json(await demoChain.capturePurchase(request.params.purchaseId));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/mandate/price-cap", async (request, response) => {
+  try {
+    response.json(await demoChain.amendPriceCap(request.body.maxUnitPrice));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/mandate/revoke", async (_request, response) => {
+  try {
+    response.json(await demoChain.revokeMandate());
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/purchase/:purchaseId/release", async (request, response) => {
+  try {
+    response.json(await demoChain.releasePurchase(request.params.purchaseId));
+  } catch (error) {
+    demoError(response, error);
+  }
 });
 
 app.get("/api/whatsapp/status", (_request, response) => {

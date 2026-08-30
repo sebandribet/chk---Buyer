@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "node server/index.js",
     "test": "npm run test:contracts && npm run test:mandates && npm run test:agent && npm run build",
-    "test:contracts": "node --test test/MandateVault.test.js",
+    "test:contracts": "node --test test/*.test.js",
     "test:mandates": "forge test",
     "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test"
   },
