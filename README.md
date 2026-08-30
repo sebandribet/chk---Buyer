@@ -2,6 +2,8 @@
 
 Chk! Buyer is an AI purchasing assistant for small businesses. A business owner spends too much time opening supplier sites, comparing prices, tracking stock, and keeping scattered purchase notes up to date. Chk! Buyer turns that work into a controlled purchasing loop: the owner describes the goal, the agent makes the market legible, and the system only spends within rules the owner has explicitly approved.
 
+For the live-demo chat to use OpenAI, copy `.env.example` to `.env`, add `OPENAI_API_KEY`, then restart `npm run dev`. A successful reply shows its live OpenAI response ID and model in the chat; an API failure is shown in the UI and never silently replaced with a local response.
+
 The product does not give an AI agent a raw card or an unlimited budget. It gives the agent a **mandate**: a structured, revocable authorization that the owner can read, edit, sign, and withdraw at any time.
 
 ## Product Flow
@@ -65,6 +67,8 @@ Agent policy     Merchant proof       Payment adapter
 
 The agent cannot invent an order: `reservePurchase` accepts a checkout digest signed by the approved merchant. That digest is domain-bound to the chain, vault, mandate, merchant, product, order reference, price, quantity, and quote expiry.
 
+For the live marketplace demo, `createMarketplaceMandate` records an approved seller set and `reserveMarketplacePurchase` binds the selected seller into the signed quote and one-use credential. This lets the agent compare sellers without broadening its authority: only a seller explicitly named in the mandate may sign a checkout or capture the payment.
+
 `MockCardProcessor` and `MockUSD` simulate the external payment boundary. The mock credential provider enrolls an opaque payment token during KYC/login; no raw card number or buyer identity is put on-chain. Reservation issues a merchant-specific, one-use credential but does **not** debit or hold money. Only `settlePurchase`, after live merchant verification, atomically charges the buyer's mock card-on-file and pays the merchant. The processor never holds a buyer float. This proves the product boundary without claiming to operate a card program, custody customer money, or replace KYC/PCI/card-network obligations.
 
 `contracts/mandates/MandateModule.sol` is a second, policy-oriented prototype with versioning and one-time authorizations. It remains covered by Foundry tests, but the team should not deploy it as a second payment authority alongside `MandateVault`. The next contract task is to consolidate its revision and policy-hash capabilities into the canonical vault flow.
@@ -107,6 +111,18 @@ npm test
 
 `npm test` runs the local-chain payment test, the Foundry mandate lifecycle suite, agent type-check/tests, and the production UI build. `npm run dev` starts the Vite UI and the local Express server.
 
+### OpenAI marketplace chat
+
+The live demo uses the Responses API to interpret natural-language purchase requests. Copy the root example file, add your API key, then start the app:
+
+```bash
+cp .env.example .env
+# Set OPENAI_API_KEY in .env
+npm run dev
+```
+
+`OPENAI_MODEL` defaults to `gpt-4.1-mini` and can be overridden in `.env`. The model receives only the conversation and mock product catalog; it cannot choose a seller, create a mandate, or move money. The server validates its product ID against the catalog and calculates every seller choice and payment amount itself. If no key is configured or the request fails, the demo displays `catalog fallback` and remains usable offline.
+
 ## Live trial-by-fire API
 
 `server/demoChain.js` is the shared local integration boundary for the demo. It deploys the mock USD, card processor and canonical `MandateVault` into an in-memory chain, so no deployed network, raw card data or manual contract-console step is required.
@@ -115,10 +131,11 @@ Start the server with `npm start`, then use these endpoints from the UI, agent o
 
 | Action | Endpoint | Example payload |
 | --- | --- | --- |
-| Reset and deploy the demo stack | `POST /api/demo/reset` | `{ "product": "flight-cordoba", "quantity": 1, "maxUnitPrice": "150", "budget": "150" }` |
-| Complete Marta's mock KYC/login and enroll the payment token | `POST /api/demo/kyc/login` | — |
-| Sign Marta's mandate using the enrolled payment token | `POST /api/demo/mandate` | `{ "quantity": 1, "maxUnitPrice": "150", "budget": "150" }` |
-| Agent attempts a purchase | `POST /api/demo/agent/purchase` | `{ "orderReference": "VuelaYa-130", "quantity": 1, "unitPrice": "130" }` |
+| Reset and deploy the marketplace stack | `POST /api/demo/reset` | `{}` |
+| Introduce and KYC the mock buyer | `POST /api/demo/kyc/login` | `{ "name": "Ada Lovelace", "email": "ada@demo.test", "company": "Analytical Engines" }` |
+| Send a live purchase intention | `POST /api/demo/agent/intent` | `{ "prompt": "Buy 2 ergonomic chairs under $500" }` |
+| Sign the two-seller marketplace mandate | `POST /api/demo/mandate` | `{}` |
+| Agent compares both signed offers and authorizes the cheapest eligible one | `POST /api/demo/agent/compare-and-authorize` | — |
 | Merchant verifies before accepting | `GET /api/demo/merchant/verify/:purchaseId` | — |
 | Merchant captures a verified authorization | `POST /api/demo/merchant/capture/:purchaseId` | — |
 | Owner lowers price cap live | `POST /api/demo/mandate/price-cap` | `{ "maxUnitPrice": "120" }` |
@@ -129,13 +146,13 @@ The merchant-verification response is computed from live chain state: mandate ac
 
 ## MVP Demo
 
-1. The owner asks Chk! Buyer to replenish a business supply.
-2. The agent produces a structured draft and asks only for missing constraints.
-3. The owner completes KYC/login, which enrolls a mock opaque payment token—without moving money.
-4. The owner signs the mandate with that token reference.
-5. The agent compares offers; VuelaYa signs the exact checkout quote and the agent binds it to the mandate.
-6. The mock payment flow issues a one-use credential for the approved merchant and amount, but the buyer balance remains unchanged.
-7. The merchant verifies it, then capture atomically debits the mock bank balance and pays the merchant; the audit trail shows the mandate, quote, decision, and payment result.
+1. The presenter introduces a mock buyer and their mock wallet at the KYC desk.
+2. The buyer enters a live purchase intention for an office chair, monitor, or keyboard and a total budget.
+3. The agent turns that intent into explicit product, quantity, unit-cap, and budget rules.
+4. The buyer signs a marketplace mandate that names both seller wallets: OfficeCore and SupplyHub.
+5. The agent compares their seller-signed quotes and binds only the lowest eligible one to the mandate.
+6. The mock payment flow issues a one-use credential for the selected seller and exact amount, but the buyer balance remains unchanged.
+7. The selected merchant verifies it, then capture atomically debits the buyer mock wallet and credits that seller wallet; the UI and audit trail show both balances changing.
 8. The judge lowers the price cap; an old unused credential and a new over-cap attempt fail, while a new in-policy attempt succeeds.
 9. The judge revokes the mandate and a new attempt or unused-credential capture fails.
 

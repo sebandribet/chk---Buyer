@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Bot,
   Bell,
   Building2,
   Check,
@@ -1061,22 +1062,39 @@ async function demoRequest(path, options = {}) {
 function LiveDemoPage() {
   const [demo, setDemo] = useState(null);
   const [purchaseId, setPurchaseId] = useState(null);
-  const [verification, setVerification] = useState(null);
   const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState("Start the local chain, then complete KYC payment login before signing a mandate.");
+  const [notice, setNotice] = useState("Start the local marketplace, then introduce a buyer at the KYC desk.");
+  const [buyer, setBuyer] = useState({ name: "Marta Ruiz", email: "marta@ruizstudio.demo", company: "Ruiz Studio" });
+  const [intentMessage, setIntentMessage] = useState("Buy 2 ergonomic chairs under $500");
+  const [draftForm, setDraftForm] = useState({ productId: "", quantity: "1", maxUnitPrice: "", budget: "" });
+  const draft = demo?.marketplace?.draft;
+
+  useEffect(() => {
+    if (!demo) return undefined;
+    const refresh = setInterval(() => {
+      demoRequest("/api/demo/state").then(setDemo).catch(() => {});
+    }, 1500);
+    return () => clearInterval(refresh);
+  }, [Boolean(demo)]);
+
+  useEffect(() => {
+    if (!draft) return;
+    setDraftForm({
+      productId: draft.productId ?? "",
+      quantity: String(draft.quantity ?? 1),
+      maxUnitPrice: draft.maxUnitPrice ?? "",
+      budget: draft.budget ?? "",
+    });
+  }, [draft?.id, draft?.revision, draft?.status]);
 
   async function startDemo() {
     setAction("start");
     setNotice("");
     setPurchaseId(null);
-    setVerification(null);
     try {
-      const state = await demoRequest("/api/demo/reset", {
-        method: "POST",
-        body: JSON.stringify({ product: "flight-cordoba", quantity: 1, maxUnitPrice: "150", budget: "150" }),
-      });
+      const state = await demoRequest("/api/demo/reset", { method: "POST", body: JSON.stringify({}) });
       setDemo(state);
-      setNotice(`Local payment stack deployed in block ${state.network.latestBlock}. No mandate or payment credential exists yet.`);
+      setNotice(`Local chain and three mock wallets are ready in block ${state.network.latestBlock}. No buyer credential or mandate exists yet.`);
     } catch (error) {
       setNotice(`Backend unavailable: ${error.message}`);
     } finally {
@@ -1088,9 +1106,71 @@ function LiveDemoPage() {
     setAction("kyc");
     setNotice("");
     try {
-      const state = await demoRequest("/api/demo/kyc/login", { method: "POST" });
+      const state = await demoRequest("/api/demo/kyc/login", { method: "POST", body: JSON.stringify(buyer) });
       setDemo(state);
-      setNotice(`KYC payment login confirmed in block ${state.network.latestBlock}. Marta's opaque payment token is ready for capture; no money moved.`);
+      setNotice(`${state.buyer.name} is KYC-verified. Their opaque payment token is ready; no money moved.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function submitIntent(event) {
+    event.preventDefault();
+    const prompt = intentMessage.trim();
+    if (!prompt) return;
+    setAction("intent");
+    setNotice("");
+    try {
+      const result = await demoRequest("/api/demo/agent/intent", {
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+      });
+      setDemo(result.state);
+      if (!result.state.marketplace.selection) setPurchaseId(null);
+      setIntentMessage("");
+      const nextDraft = result.draft ?? result.intent;
+      setNotice(nextDraft.status === "ready"
+        ? `Draft v${nextDraft.revision} is ready for your review. It is not a payment authorization.`
+        : nextDraft.reply);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function applyDraftEdits(event) {
+    event.preventDefault();
+    setAction("edit-draft");
+    setNotice("");
+    try {
+      const state = await demoRequest("/api/demo/mandate/draft", {
+        method: "PATCH",
+        body: JSON.stringify({
+          productId: draftForm.productId,
+          quantity: Number(draftForm.quantity),
+          maxUnitPrice: draftForm.maxUnitPrice,
+          budget: draftForm.budget,
+        }),
+      });
+      setDemo(state);
+      setNotice(`Draft v${state.marketplace.draft.revision} updated. Review it before confirming.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function confirmDraft() {
+    setAction("confirm-draft");
+    setNotice("");
+    try {
+      const state = await demoRequest("/api/demo/mandate/draft/confirm", { method: "POST" });
+      setDemo(state);
+      setNotice(`Draft v${state.marketplace.draft.revision} confirmed. Signing is still a separate action.`);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1102,12 +1182,10 @@ function LiveDemoPage() {
     setAction("mandate");
     setNotice("");
     try {
-      const state = await demoRequest("/api/demo/mandate", {
-        method: "POST",
-        body: JSON.stringify({ quantity: 1, maxUnitPrice: "150", budget: "150" }),
-      });
+      const state = await demoRequest("/api/demo/mandate", { method: "POST", body: JSON.stringify({}) });
       setDemo(state);
-      setNotice(`Mandate signed in block ${state.network.latestBlock}. Marta authorizes one flight to Córdoba up to US$150; no funds are locked.`);
+      const signing = state.marketplace.signedMandate;
+      setNotice(`Definitive mandate sent to the local mock chain in block ${signing.blockNumber}. The agent can now search only within its signed limits.`);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1115,17 +1193,19 @@ function LiveDemoPage() {
     }
   }
 
-  async function findAndAuthorize() {
-    setAction("authorize");
+  async function compareAndAuthorize() {
+    setAction("compare");
     setNotice("");
     try {
-      const result = await demoRequest("/api/demo/agent/purchase", {
-        method: "POST",
-        body: JSON.stringify({ orderReference: "VuelaYa-COR-130", quantity: 1, unitPrice: "130" }),
-      });
-      setPurchaseId(result.purchaseId);
+      const result = await demoRequest("/api/demo/agent/compare-and-authorize", { method: "POST" });
       setDemo(result.state);
-      setNotice(`Agent transaction confirmed in block ${result.state.network.latestBlock}. VuelaYa's signed US$130 checkout is bound to the mandate; Marta has not been charged.`);
+      if (result.status === "authorized") {
+        setPurchaseId(result.purchaseId);
+        setNotice(`Agent selected ${result.selection.merchant}'s lowest eligible quote. The checkout is authorized, but the buyer has not been charged.`);
+      } else {
+        setPurchaseId(null);
+        setNotice(result.report.recommendation);
+      }
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1133,16 +1213,13 @@ function LiveDemoPage() {
     }
   }
 
-  async function verifyPurchase() {
-    if (!purchaseId) return;
-    setAction("verify");
+  async function reopenDraft() {
+    setAction("reopen-draft");
     setNotice("");
     try {
-      const result = await demoRequest(`/api/demo/merchant/verify/${purchaseId}`);
-      setVerification(result);
-      setNotice(result.verified
-        ? "VuelaYa read live chain state and approved every verification check."
-        : "Merchant verification failed. Capture is blocked.");
+      const state = await demoRequest("/api/demo/mandate/draft/reopen", { method: "POST" });
+      setDemo(state);
+      setNotice(`The previous mandate was revoked without payment. Draft v${state.marketplace.draft.revision} is ready to revise.`);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1150,14 +1227,21 @@ function LiveDemoPage() {
     }
   }
 
-  async function capturePurchase() {
-    if (!purchaseId) return;
-    setAction("capture");
+  async function validateAndCapture() {
+    const activePurchaseId = demo?.marketplace?.selection?.purchaseId ?? purchaseId;
+    if (!activePurchaseId) return;
+    setAction("settle");
     setNotice("");
     try {
-      const result = await demoRequest(`/api/demo/merchant/capture/${purchaseId}`, { method: "POST" });
+      const verificationResult = await demoRequest(`/api/demo/merchant/verify/${activePurchaseId}`);
+      if (!verificationResult.verified) {
+        setNotice("Merchant validation failed. Payment was not captured.");
+        return;
+      }
+      const result = await demoRequest(`/api/demo/merchant/capture/${activePurchaseId}`, { method: "POST" });
       setDemo(result.state);
-      setNotice(`Merchant capture confirmed in block ${result.state.network.latestBlock}. US$130 is now in VuelaYa's account.`);
+      const selected = result.state.marketplace.selection.selected;
+      setNotice(`Validated and paid. US$${selected.amount} moved from ${result.state.buyer.name} to ${selected.merchant}.`);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -1165,125 +1249,168 @@ function LiveDemoPage() {
     }
   }
 
-  const balances = demo?.balances || { buyer: "—", cardProcessor: "—", merchant: "—" };
+  const balances = demo?.balances || { buyer: "—", merchant: "—", alternateMerchant: "—" };
+  const selection = demo?.marketplace?.selection;
+  const chatMessages = demo?.marketplace?.conversation ?? [];
+  const agentMode = demo?.marketplace?.agent?.mode;
+  const agent = demo?.marketplace?.agent;
+  const marketSearch = demo?.marketplace?.marketSearch;
+  const report = demo?.marketplace?.lastReport;
+  const draftReady = draft?.status === "ready";
+  const draftReviewed = draft?.status === "reviewed";
+  const draftSigned = draft?.status === "signed";
+  const selectedMerchant = selection?.merchant;
   const hasKycPayment = Boolean(demo?.kyc?.captureReady);
-  const hasMandate = Boolean(demo?.mandate);
-  const isCaptured = Boolean(demo) && Number(balances.merchant) > 0;
-  const canVerify = Boolean(purchaseId) && !verification;
-  const canCapture = Boolean(verification?.verified) && !isCaptured;
-  const step = !demo ? 1 : !hasKycPayment ? 2 : !hasMandate ? 3 : !purchaseId ? 4 : !verification ? 5 : !isCaptured ? 6 : 7;
+  const isAuthorized = selection?.status === "Authorized";
+  const isCaptured = selection?.status === "Settled";
+  const currentProduct = demo?.marketplace?.catalog?.find((product) => product.id === draft?.productId);
 
   return (
-    <section className="page live-demo-page">
-      <div className="page-header live-demo-header">
-        <div>
-          <span className="eyebrow">LIVE BACKEND DEMO · LOCAL EVM CHAIN</span>
-          <h1>Autonomous purchase, proven step by step.</h1>
-          <p>This is not a simulated progress bar. Every step below calls the local payment backend, submits a contract transaction, and reads the resulting state back from the chain.</p>
+    <section className="page simple-demo-page">
+      <div className="simple-demo-header">
+        <div><span className="eyebrow">LIVE PURCHASE DEMO</span><h1>One buyer. Two sellers. One approved payment.</h1></div>
+        <button className="secondary-button" onClick={startDemo} disabled={action !== null}><RefreshCw size={15} /> {action === "start" ? "Starting..." : demo ? "Reset" : "Start demo"}</button>
+      </div>
+
+      <div className="simple-demo-grid">
+        <article className="simple-window buyer-window">
+          <div className="simple-window-label"><Building2 size={16} /> BUYER WALLET <i>{demo ? "LIVE" : "OFFLINE"}</i></div>
+          <strong className="wallet-balance">US${balances.buyer}</strong>
+          <span className="wallet-owner">{demo?.buyer?.name || "Start the demo to create a buyer wallet"}</span>
+          <p>{isCaptured ? `Payment sent: −US$${selection.selected.amount}` : isAuthorized ? "Payment authorized. Balance stays unchanged until capture." : "Funds stay in this wallet until a validated seller captures payment."}</p>
+          <code>{shortAddress(demo?.buyer?.wallet)}</code>
+          <div className={`wallet-state ${hasKycPayment ? "ready" : ""}`}><ShieldCheck size={14} /> {hasKycPayment ? "KYC payment token ready" : "KYC not completed"}</div>
+        </article>
+
+        <article className="simple-window control-window">
+          <div className="simple-window-label"><Bot size={16} /> KYC + ASK THE AGENT {agentMode && <i>{agentMode}</i>}</div>
+          {!demo && <div className="control-empty"><p>Start the demo, introduce the buyer, then tell the agent what to purchase.</p><button className="primary-button" onClick={startDemo} disabled={action !== null}>Start live wallets</button></div>}
+
+          {demo && !hasKycPayment && <div className="control-flow"><p>Introduce the buyer for mock KYC.</p><div className="simple-fields"><input value={buyer.name} onChange={(event) => setBuyer((current) => ({ ...current, name: event.target.value }))} placeholder="Buyer name" /><input value={buyer.email} onChange={(event) => setBuyer((current) => ({ ...current, email: event.target.value }))} placeholder="Business email" /><input value={buyer.company} onChange={(event) => setBuyer((current) => ({ ...current, company: event.target.value }))} placeholder="Company" /></div><button className="primary-button" onClick={completeKycLogin} disabled={action !== null}><ShieldCheck size={15} /> {action === "kyc" ? "Verifying buyer..." : "Verify buyer"}</button></div>}
+
+          {hasKycPayment && (!draftSigned || isCaptured) && <div className="control-flow"><p>{isCaptured ? "Purchase complete. What would you like to buy next?" : draftReady ? "Revise the draft here, or edit its final terms below." : "What should the agent draft for you?"}</p><div className="simple-chat" aria-live="polite">{chatMessages.map((message, index) => <div className={message.role} key={`${message.role}-${index}`}>{message.content}</div>)}</div>{agent?.requestId && <div className="agent-runtime live">Live OpenAI response <code>{agent.requestId}</code>{agent.model && <> · {agent.model}</>}</div>}{agent?.error && <div className="agent-runtime error">OpenAI error: {agent.error}</div>}<form className="simple-composer" onSubmit={submitIntent}><textarea value={intentMessage} onChange={(event) => setIntentMessage(event.target.value)} rows="2" aria-label="Purchase intention" /><button type="submit" disabled={action !== null || !intentMessage.trim()}><Send size={16} /></button></form><small>Describe the use case naturally — e.g. “I need two supportive mesh seats for long desk sessions under $500”.</small></div>}
+
+          {hasKycPayment && draftReviewed && <div className="control-flow"><p>Draft v{draft.revision} is confirmed. The exact terms below are ready for a separate blockchain-signing action.</p></div>}
+
+          {hasKycPayment && draftSigned && !selection && marketSearch?.status !== "no_eligible_option" && <div className="control-flow"><p>Definitive mandate signed. The agent can now search the live seller offers using only its signed product, quantity, and price caps.</p><button className="primary-button" onClick={compareAndAuthorize} disabled={action !== null}><Bot size={16} /> {action === "compare" ? "Searching market..." : "Run agent market search"}</button></div>}
+
+          {hasKycPayment && draftSigned && marketSearch?.status === "no_eligible_option" && <div className="control-flow"><p>No seller met the signed limits. No checkout was authorized and no money moved.</p><button className="secondary-button" onClick={reopenDraft} disabled={action !== null}><RefreshCw size={15} /> {action === "reopen-draft" ? "Reopening..." : "Revise signed mandate"}</button></div>}
+
+          {isAuthorized && <div className="control-flow"><p><b>{selection.merchant}</b> was selected at US${selection.selected.amount}. The seller must validate the mandate proof before payment can settle.</p><button className="primary-button" onClick={validateAndCapture} disabled={action !== null}><WalletCards size={15} /> {action === "settle" ? "Validating and paying..." : `Validate & pay US$${selection.selected.amount}`}</button></div>}
+
+        </article>
+
+        <article className="simple-window sellers-window">
+          <div className="simple-window-label"><Store size={16} /> SELLER WALLETS <i>{demo ? "LIVE" : "OFFLINE"}</i></div>
+          <div className="seller-wallet-list">
+            {[{ name: "OfficeCore", balance: balances.merchant, address: demo?.identities?.merchant }, { name: "SupplyHub", balance: balances.alternateMerchant, address: demo?.identities?.alternateMerchant }].map((seller) => {
+              const quote = currentProduct?.offers.find((offer) => offer.merchant === seller.name);
+              const selected = seller.name === selectedMerchant;
+              return <article className={selected ? "selected" : ""} key={seller.name}><div><span>{seller.name}</span>{selected && <em>{isCaptured ? "PAID" : "CHOSEN"}</em>}</div><strong>US${seller.balance}</strong><small>{quote ? `${currentProduct.name} · US$${quote.unitPrice} each` : "Waiting for a purchase request"}</small><code>{shortAddress(seller.address)}</code></article>;
+            })}
+          </div>
+          <p className="seller-note">{selection ? `${selection.merchant} has the lowest eligible total: US$${selection.selected.amount}.` : marketSearch?.status === "no_eligible_option" ? "Both offers were rejected by the signed mandate; no checkout or payment exists." : draftSigned ? "The signed mandate is ready for a policy-bound market search." : draftReady ? "The draft is editable and is not yet spend authority." : "The agent compares both sellers only after the buyer signs a mandate."}</p>
+        </article>
+      </div>
+
+      <section className="mandate-workbench">
+        <div className="mandate-workbench-heading">
+          <div><span className="simple-window-label"><ClipboardList size={16} /> MANDATE LIFECYCLE</span><h2>Draft first. Spend authority only after an explicit signature.</h2></div>
+          <span className={`mandate-state ${draft?.status ?? "empty"}`}>{draft ? draft.status.replace("_", " ") : "waiting for request"}</span>
         </div>
-        <button className="secondary-button" onClick={startDemo} disabled={action !== null}>
-          <RefreshCw size={15} /> {action === "start" ? "Deploying..." : demo ? "Reset local chain" : "Start local chain"}
-        </button>
-      </div>
-
-      <div className="demo-stepper">
-        {[[1, "Start chain"], [2, "KYC + payment token"], [3, "Sign mandate"], [4, "Agent binds checkout"], [5, "Merchant verifies"], [6, "Capture and pay"]].map(([number, label]) => <div key={number} className={step > number ? "done" : step === number ? "current" : ""}><b>{step > number ? "✓" : number}</b><span>{label}</span></div>)}
-      </div>
-
-      <div className="live-demo-mandate">
-        <div><span>BUYER + KYC LOGIN</span><strong>Marta · mock business bank account</strong><code>{demo?.kyc?.status || "not started"} · {shortAddress(demo?.identities?.owner)}</code></div>
-        <div><span>MANDATE</span><strong>1 Córdoba flight · max US$ {demo?.mandate?.maxUnitPrice || "150.0"}</strong><code>revision {demo?.mandate?.revision || "—"} · {demo?.mandate?.status || "not signed"}</code></div>
-        <div><span>PURCHASING AGENT</span><strong>CHK Buyer · separate wallet</strong><code>{shortAddress(demo?.identities.agent)}</code></div>
-        <div><span>APPROVED MERCHANT</span><strong>VuelaYa</strong><code>{shortAddress(demo?.identities.merchant)}</code></div>
-      </div>
-
-      <section className="live-demo-actions demo-setup-actions">
-        <article>
-          <span>STEP 2 · BUYER KYC / PAYMENT LOGIN</span>
-          <p>KYC verifies Marta and saves only an opaque card-on-file token. This permits instant capture later, but stores no raw card data and locks no funds.</p>
-          <button className="secondary-button" onClick={completeKycLogin} disabled={!demo || hasKycPayment || action !== null}>
-            <ShieldCheck size={15} /> {action === "kyc" ? "Enrolling payment token..." : hasKycPayment ? "KYC payment token ready" : "Complete KYC payment login"}
-          </button>
-        </article>
-        <article>
-          <span>STEP 3 · HUMAN SIGNS MANDATE</span>
-          <p>Marta delegates one specific flight purchase to CHK Buyer. The contract binds the agent, merchant, product rule, price cap, KYC reference, and revocation state.</p>
-          <button className="secondary-button" onClick={createMandate} disabled={!hasKycPayment || hasMandate || action !== null}>
-            <CheckCircle2 size={15} /> {action === "mandate" ? "Signing mandate..." : hasMandate ? "Mandate signed" : "Sign mandate"}
-          </button>
-        </article>
-      </section>
-
-      <div className="live-demo-offer">
-        <div className="offer-copy"><span>AGENT DISCOVERY RESULT</span><h2>Buenos Aires → Córdoba</h2><p>VuelaYa · US$130 · below Marta’s US$150 mandate limit.</p></div>
-        <div className="offer-price"><span>US$130</span><small>best eligible offer</small></div>
-        <button className="primary-button" onClick={findAndAuthorize} disabled={!hasMandate || action !== null || Boolean(purchaseId)}>
-          <CheckCircle2 size={15} /> {action === "authorize" ? "Binding checkout..." : purchaseId ? "Checkout bound" : "Agent buys automatically"}
-        </button>
-      </div>
-
-      <section className="money-flow" aria-label="Live money movement">
-        <MoneyNode icon={Building2} label="Marta's bank balance" value={`US$${balances.buyer}`} status={isCaptured ? "US$130 debited at capture" : purchaseId ? "Unchanged — capture pending" : "No mandate funds locked"} address={shortAddress(demo?.identities?.owner)} />
-        <FlowArrow active={isCaptured} label="capture-only debit" />
-        <MoneyNode icon={CreditCard} label="KYC-linked one-use credential" value={isCaptured ? "Consumed" : purchaseId ? "US$130 authorized" : "Not issued"} status={isCaptured ? "Used for VuelaYa checkout" : purchaseId ? "No funds held; VuelaYa only" : "Issued after quote binding"} highlighted={Boolean(purchaseId)} address={shortAddress(demo?.contracts?.cardProcessor)} />
-        <FlowArrow active={isCaptured} label="merchant capture" />
-        <MoneyNode icon={Store} label="VuelaYa settlement balance" value={`US$${balances.merchant}`} status={isCaptured ? "Payment received" : "Cannot receive before verification"} highlighted={isCaptured} address={shortAddress(demo?.identities?.merchant)} />
-      </section>
-
-      <section className="live-demo-actions">
-        <article>
-          <span>STEP 5 · LIVE MERCHANT CHECK</span>
-          <p>VuelaYa queries the contract. It must see an active mandate, KYC-linked payment token, matching merchant, current revision, signed checkout hash, and a live one-use credential.</p>
-          <button className="secondary-button" onClick={verifyPurchase} disabled={!canVerify || action !== null}>
-            <ShieldCheck size={15} /> {action === "verify" ? "Reading chain state..." : verification ? "Verification approved" : "Verify mandate live"}
-          </button>
-        </article>
-        <article>
-          <span>STEP 6 · CAPTURE PAYMENT</span>
-          <p>Only a verified merchant can capture. This atomically debits Marta’s tokenized card-on-file and pays VuelaYa in the next block—no pre-funded escrow.</p>
-          <button className="primary-button" onClick={capturePurchase} disabled={!canCapture || action !== null}>
-            <WalletCards size={15} /> {action === "capture" ? "Capturing on-chain..." : isCaptured ? "Payment settled" : "Capture US$130"}
-          </button>
-        </article>
-      </section>
-
-      {verification && (
-        <div className="verification-result">
-          <strong><ShieldCheck size={16} /> Merchant verification {verification.verified ? "passed" : "failed"}</strong>
-          <div>{Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}>{passed ? "✓" : "×"} {humanizeCheck(check)}</span>)}</div>
+        <div className="mandate-steps" aria-label="Mandate lifecycle">
+          <span className={draft ? "complete" : "active"}>1. Draft</span><span className={draftReviewed || draftSigned ? "complete" : ""}>2. Review</span><span className={draftSigned ? "complete" : ""}>3. Sign to chain</span><span className={marketSearch?.status !== "not_started" ? "complete" : ""}>4. Search</span><span className={report ? "complete" : ""}>5. Report</span>
         </div>
-      )}
 
-      <p className="live-demo-notice">{notice}</p>
+        {!demo && <p className="mandate-empty">Start the demo and complete mock KYC to create a buyer-owned mandate draft.</p>}
+        {demo && !hasKycPayment && <p className="mandate-empty">Complete mock KYC first. It creates a payment token only; it does not create a mandate.</p>}
+        {hasKycPayment && !draft && <p className="mandate-empty">Ask the agent for something in natural language. It will propose a semantic catalog match and a non-binding mandate draft.</p>}
 
-      <section className="backend-proof">
-        <div><span>BACKEND PROOF</span><strong>{demo?.network.name || "Waiting to start the local chain"}</strong><small>chain ID {demo?.network.chainId || "—"} · latest block {demo?.network.latestBlock || "—"}</small></div>
-        <div><span>MANDATE CONTRACT</span><code>{demo?.contracts.vault || "—"}</code></div>
-        <div><span>PAYMENT PROCESSOR CONTRACT</span><code>{demo?.contracts.cardProcessor || "—"}</code></div>
+        {draft?.status === "needs_revision" && <div className="mandate-message"><strong>No safe mandate draft yet.</strong><p>{draft.recommendation}</p><small>{draft.reply}</small></div>}
+        {draft?.status === "agent_error" && <div className="mandate-message error"><strong>The live agent was unavailable.</strong><p>{draft.recommendation}</p><small>{draft.reply}</small></div>}
+
+        {draftReady && <form className="draft-editor" onSubmit={applyDraftEdits}>
+          <div className="draft-editor-heading"><div><strong>MANDATE DRAFT v{draft.revision}</strong><span>Not spend authority · created from your prompt</span></div><small>{draft.agentMode === "OpenAI live" ? "Semantic match proposed by live OpenAI" : "Local catalog fallback"}</small></div>
+          <p className="draft-reply">{draft.reply}</p>
+          <div className="draft-fields">
+            <label><span>Product to authorize</span><select value={draftForm.productId} onChange={(event) => setDraftForm((current) => ({ ...current, productId: event.target.value }))}>{demo.marketplace.catalog.map((product) => <option value={product.id} key={product.id}>{product.name}</option>)}</select></label>
+            <label><span>Quantity</span><input type="number" min="1" max="20" value={draftForm.quantity} onChange={(event) => setDraftForm((current) => ({ ...current, quantity: event.target.value }))} /></label>
+            <label><span>Maximum unit price (USD)</span><input inputMode="decimal" value={draftForm.maxUnitPrice} onChange={(event) => setDraftForm((current) => ({ ...current, maxUnitPrice: event.target.value }))} /></label>
+            <label><span>Total mandate cap (USD)</span><input inputMode="decimal" value={draftForm.budget} onChange={(event) => setDraftForm((current) => ({ ...current, budget: event.target.value }))} /></label>
+          </div>
+          <div className="draft-policy"><span>Approved sellers</span><strong>{draft.approvedSellers?.join(" · ")}</strong><small>The agent may only choose an exact catalog offer that is below both signed caps.</small></div>
+          <div className="draft-actions"><button className="secondary-button" type="submit" disabled={action !== null}><RefreshCw size={15} /> {action === "edit-draft" ? "Applying..." : "Apply edits"}</button><button className="primary-button" type="button" onClick={confirmDraft} disabled={action !== null}><CheckCircle2 size={15} /> {action === "confirm-draft" ? "Confirming..." : "Confirm final terms"}</button></div>
+        </form>}
+
+        {draftReviewed && <div className="mandate-final-review"><div><strong>FINAL REVIEW · DRAFT v{draft.revision}</strong><p>This is the exact policy that will be sent to the local mock chain. Editing it will require a new review.</p></div><MandateTerms draft={draft} /><button className="primary-button" onClick={createMandate} disabled={action !== null}><WalletCards size={15} /> {action === "mandate" ? "Sending to chain..." : "Sign definitive mandate"}</button></div>}
+
+        {draftSigned && <div className="mandate-signed"><div><strong>SIGNED DEFINITIVE MANDATE · #{draft.signing?.mandateId}</strong><p>Signed in local block {draft.signing?.blockNumber}. The agent can search only for <b>{draft.product}</b> within these exact limits.</p></div><MandateTerms draft={draft} /><div className="chain-proof"><span>LOCAL CHAIN TX</span><code>{shortAddress(draft.signing?.transactionHash)}</code><small>Mock USD only · no real funds or card data</small></div></div>}
       </section>
 
-      <div className="live-demo-audit">
-        <span>ON-CHAIN TRANSACTION LOG</span>
-        {(demo?.audit || []).map((entry, index) => <div key={`${entry.type}-${index}`}><b>{index + 1}</b><code>{entry.type}</code><p>{entry.detail || entry.orderReference || entry.maxUnitPrice || "contract state changed"}</p><small>block {entry.blockNumber} · {shortAddress(entry.transactionHash)}</small></div>)}
-      </div>
+      <section className="catalog-window">
+        <div className="catalog-window-heading">
+          <div><span className="simple-window-label"><ClipboardList size={16} /> LIVE COMPANY CATALOG</span><h2>What each seller offers</h2><p>Prices are per unit. The outlined price is the lowest offer; when the agent buys, its chosen quote is highlighted here.</p></div>
+          <span className="catalog-count">{demo?.marketplace?.catalog?.length || 0} products</span>
+        </div>
+        {!demo ? <div className="catalog-waiting">Start the demo to load both seller catalogs and their live wallet-backed offers.</div> : <div className="catalog-scroll"><div className="catalog-price-table">
+          <div className="catalog-price-head"><span>PRODUCT</span><span>OFFICECORE</span><span>SUPPLYHUB</span><span>AGENT</span></div>
+          {demo.marketplace.catalog.map((product) => {
+            const officeOffer = product.offers.find((offer) => offer.merchant === "OfficeCore");
+            const supplyOffer = product.offers.find((offer) => offer.merchant === "SupplyHub");
+            const lowestMerchant = Number(officeOffer.unitPrice) <= Number(supplyOffer.unitPrice) ? "OfficeCore" : "SupplyHub";
+            const requested = product.id === draft?.productId;
+            return <article className={requested ? "requested" : ""} key={product.id}>
+              <div className="catalog-product"><strong>{product.name}</strong><small>{product.description}</small></div>
+              <CatalogOffer offer={officeOffer} lowest={lowestMerchant === "OfficeCore"} selected={requested && selectedMerchant === "OfficeCore"} />
+              <CatalogOffer offer={supplyOffer} lowest={lowestMerchant === "SupplyHub"} selected={requested && selectedMerchant === "SupplyHub"} />
+              <div className="catalog-agent-state">{requested ? selection ? <><CheckCircle2 size={13} /><span>{selection.merchant}<small>US${selection.selected.amount} total</small></span></> : draftSigned ? marketSearch?.status === "no_eligible_option" ? <><Clock3 size={13} /><span>No eligible offer<small>review report</small></span></> : <><Clock3 size={13} /><span>Signed<small>search ready</small></span></> : <><Clock3 size={13} /><span>Drafted<small>awaiting confirmation</small></span></> : <span>—</span>}</div>
+            </article>;
+          })}
+        </div></div>}
+      </section>
+
+      {report && <DecisionReport report={report} />}
+
+      <p className="simple-demo-notice"><span>{demo ? "● LIVE" : "○ READY"}</span>{notice}</p>
     </section>
   );
 }
 
+function MandateTerms({ draft }) {
+  return <dl className="mandate-terms"><div><dt>What</dt><dd>{draft.quantity} × {draft.product}</dd></div><div><dt>Per unit</dt><dd>US${draft.maxUnitPrice}</dd></div><div><dt>Total cap</dt><dd>US${draft.budget}</dd></div><div><dt>Sellers</dt><dd>{draft.approvedSellers?.join(", ")}</dd></div></dl>;
+}
+
+function DecisionReport({ report }) {
+  const offers = report.decision?.offers ?? [];
+  const settlement = report.settlement;
+  const isSettled = report.status === "settled";
+  const isNotExecuted = report.status === "not_executed";
+  const status = isSettled ? "SETTLED" : isNotExecuted ? "NOT EXECUTED" : "AWAITING CAPTURE";
+
+  return <section className={`decision-report ${report.status}`}>
+    <div className="decision-report-heading"><div><span className="simple-window-label"><ClipboardList size={16} /> DECISION & TRANSACTION REPORT</span><h2>{report.title}</h2><p>{report.summary}</p></div><span>{status}</span></div>
+    <div className="report-grid">
+      <article><small>MANDATE POLICY</small><strong>{report.draft?.quantity} × {report.draft?.product ?? "No product"}</strong><p>Up to US${report.draft?.unitPriceCap ?? "—"} per unit · US${report.draft?.totalBudget ?? "—"} total</p>{report.mandate?.transactionHash && <code>signed {shortAddress(report.mandate.transactionHash)} · block {report.mandate.blockNumber}</code>}</article>
+      <article><small>AGENT INTERPRETATION</small><strong>{report.agent?.mode ?? "Catalog decision"}</strong><p>{report.agent?.model ?? "Policy engine"}</p>{report.agent?.responseId && <code>{shortAddress(report.agent.responseId)}</code>}</article>
+      <article><small>DECISION</small><strong>{report.decision?.selectedMerchant ?? "No seller selected"}</strong><p>{report.decision?.rationale}</p>{report.decision?.savingsVsNextEligible && <code>US${report.decision.savingsVsNextEligible} saved vs. next eligible quote</code>}</article>
+      <article><small>AUTHORIZATION</small><strong>{report.authorization ? "Merchant quote bound" : "No authorization created"}</strong><p>{report.authorization ? "Seller verification is required before settlement." : report.recommendation}</p>{report.authorization?.transactionHash && <code>{shortAddress(report.authorization.transactionHash)} · block {report.authorization.blockNumber}</code>}</article>
+    </div>
+
+    {offers.length > 0 && <div className="report-offers"><div className="report-offer-head"><span>SELLER</span><span>UNIT</span><span>TOTAL</span><span>DECISION</span></div>{offers.map((offer) => <article key={offer.merchant} className={offer.merchant === report.decision?.selectedMerchant ? "chosen" : ""}><strong>{offer.merchant}</strong><span>US${offer.unitPrice}</span><span>US${offer.amount}</span><span>{offer.eligible ? "Eligible" : offer.rejectionReasons?.join(" ")}</span></article>)}</div>}
+
+    {report.verification && <div className="report-verification"><strong>Merchant verification: {report.verification.verified ? "passed" : "failed"}</strong><div>{Object.entries(report.verification.checks).map(([name, passed]) => <span className={passed ? "pass" : "fail"} key={name}>{passed ? "✓" : "×"} {name.replace(/([A-Z])/g, " $1")}</span>)}</div></div>}
+
+    {settlement && <div className="report-settlement"><div><span>SETTLEMENT · LOCAL MOCK CHAIN</span><strong>US${settlement.amount} paid</strong><code>{shortAddress(settlement.transactionHash)} · block {settlement.blockNumber}</code></div><div className="report-balance-movements">{Object.entries(settlement.balances).map(([wallet, movement]) => <span key={wallet}><b>{wallet}</b><i>{movement.before} → {movement.after}</i><em>{movement.delta}</em></span>)}</div></div>}
+    <small className="report-disclaimer">This report is generated from the signed mandate, seller quotes, on-chain authorization, verification checks, and mock-USD settlement. It never represents a real payment.</small>
+  </section>;
+}
+
+function CatalogOffer({ offer, lowest, selected }) {
+  return <div className={`catalog-offer ${lowest ? "lowest" : ""} ${selected ? "selected" : ""}`}><strong>US${offer.unitPrice}</strong>{lowest && <em>best price</em>}<small>{offer.delivery}</small></div>;
+}
+
 function shortAddress(address) {
   return address ? `${address.slice(0, 8)}…${address.slice(-6)}` : "—";
-}
-
-function humanizeCheck(check) {
-  return check.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function MoneyNode({ icon: Icon, label, value, status, address, highlighted = false }) {
-  return <article className={`money-node ${highlighted ? "highlighted" : ""}`}><Icon size={21} /><span>{label}</span><strong>{value}</strong><small>{status}</small><code>{address}</code></article>;
-}
-
-function FlowArrow({ active, label }) {
-  return <div className={`flow-arrow ${active ? "active" : ""}`}><i>→</i><span>{label}</span></div>;
 }
 
 function Status({ value }) {

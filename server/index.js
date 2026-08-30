@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import "dotenv/config";
 import express from "express";
 import makeWASocket, {
   DisconnectReason,
@@ -148,9 +149,9 @@ app.get("/api/demo/state", async (_request, response) => {
   }
 });
 
-app.post("/api/demo/kyc/login", async (_request, response) => {
+app.post("/api/demo/kyc/login", async (request, response) => {
   try {
-    response.json(await demoChain.loginAndEnrollBuyer());
+    response.json(await demoChain.loginAndEnrollBuyer(request.body));
   } catch (error) {
     demoError(response, error);
   }
@@ -158,7 +159,47 @@ app.post("/api/demo/kyc/login", async (_request, response) => {
 
 app.post("/api/demo/mandate", async (request, response) => {
   try {
-    response.status(201).json(await demoChain.createMandate(request.body));
+    response.status(201).json(await demoChain.createMarketplaceMandate(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.patch("/api/demo/mandate/draft", async (request, response) => {
+  try {
+    response.json(await demoChain.reviseMarketplaceDraft(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/mandate/draft/confirm", async (_request, response) => {
+  try {
+    response.json(await demoChain.confirmMarketplaceDraft());
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/mandate/draft/reopen", async (_request, response) => {
+  try {
+    response.json(await demoChain.reopenMarketplaceDraft());
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/agent/intent", async (request, response) => {
+  try {
+    response.status(201).json(await demoChain.recordIntent(request.body));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/agent/compare-and-authorize", async (_request, response) => {
+  try {
+    response.status(201).json(await demoChain.compareAndAuthorize());
   } catch (error) {
     demoError(response, error);
   }

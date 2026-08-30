@@ -8,14 +8,16 @@
     "build": "vite build",
     "start": "node server/index.js",
     "test": "npm run test:contracts && npm run test:mandates && npm run test:agent && npm run build",
-    "test:contracts": "node --test test/*.test.js",
+    "test:contracts": "MARKETPLACE_AGENT_MODE=fallback node --test test/*.test.js",
     "test:mandates": "forge test",
     "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.24",
+    "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
+    "openai": "^7.8.0",
     "pino": "^9.7.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
