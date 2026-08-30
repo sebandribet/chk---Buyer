@@ -31,211 +31,15 @@ const tabs = [
   { id: "whatsapp", label: "Avisos", icon: Bell },
 ];
 
-const initialMessages = [
-  {
-    id: 1,
-    role: "user",
-    content: "Necesito reponer 20 rollos de film stretch de 500 metros cada 15 días. No quiero pagar más de $8.500 por rollo.",
-    time: "09:40",
-  },
-  {
-    id: 2,
-    role: "agent",
-    content: "Entendido. Para que vos, el agente y los proveedores trabajemos con las mismas reglas, preparé un borrador estandarizado del mandato.",
-    time: "09:41",
-  },
-  {
-    id: 3,
-    role: "agent",
-    kind: "draft",
-    time: "09:41",
-    draft: {
-      version: 4,
-      product: "Film stretch industrial",
-      specification: "50 cm x 500 m · 23 micrones",
-      quantity: "Hasta 20 rollos",
-      frequency: "Cada 15 días",
-      unitLimit: "$8.500",
-      totalLimit: "$500.000",
-      expiration: "30 sep 2026",
-      paymentMethod: "Tarjeta empresa · •••• 4242",
-    },
-  },
-];
+const initialMessages = [];
 
-const initialMandates = [
-  {
-    id: "MD-001",
-    product: "Film stretch industrial",
-    description: "Rollo de 50 cm x 500 m, 23 micrones",
-    status: "Activo",
-    frequency: "Cada 15 días",
-    quantity: "Hasta 20 rollos",
-    unitPrice: 8500,
-    monthlyBudget: 500000,
-    suppliers: "PackAR y Distribuidora Centro",
-    expires: "30 sep 2026",
-    version: 3,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xA91C...4E20",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "1 ago 2026",
-    maxPerOperation: 170000,
-    spent: 291800,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
-    policyHash: "0x9f8a7c4e...13bd92a1",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Distribuidora Centro",
-    previousSupplier: "PackAR",
-    supplierReason: "12% más económico y entrega dentro de las 48 horas.",
-    lastRun: "29 ago 2026 · 10:24",
-    nextRun: "12 sep 2026 · 08:00",
-    lastCard: "•••• 4821",
-  },
-  {
-    id: "MD-002",
-    product: "Guantes de nitrilo",
-    description: "Caja x 100 unidades, talle M, sin polvo",
-    status: "Activo",
-    frequency: "Mensual",
-    quantity: "Hasta 12 cajas",
-    unitPrice: 12600,
-    monthlyBudget: 151200,
-    suppliers: "Proveeduría Norte",
-    expires: "15 oct 2026",
-    version: 2,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xB281...9C15",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "15 jul 2026",
-    maxPerOperation: 151200,
-    spent: 98400,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
-    policyHash: "0x4b18d620...8f31b781",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Proveeduría Norte",
-    previousSupplier: "Proveeduría Norte",
-    supplierReason: "Mantuvo el mejor equilibrio entre precio y disponibilidad.",
-    lastRun: "22 ago 2026 · 09:11",
-    nextRun: "3 sep 2026 · 08:00",
-    lastCard: "•••• 1906",
-  },
-  {
-    id: "MD-003",
-    product: "Aceite hidráulico ISO 46",
-    description: "Tambor de 20 litros, norma DIN 51524",
-    status: "Borrador",
-    frequency: "Cada 60 días",
-    quantity: "Hasta 4 tambores",
-    unitPrice: 92000,
-    monthlyBudget: 368000,
-    suppliers: "A definir",
-    expires: "30 nov 2026",
-    version: 1,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xA91C...4E20",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "Pendiente de activación",
-    maxPerOperation: 368000,
-    spent: 0,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor"],
-    policyHash: "0x7c941d02...c4af7710",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Sin seleccionar",
-    previousSupplier: "—",
-    supplierReason: "Todavía no se ejecutó una compra.",
-    lastRun: "28 ago 2026 · 16:42",
-    nextRun: "Sin programar",
-    lastCard: "—",
-  },
-];
+const initialMandates = [];
 
-const purchases = [
-  {
-    id: "OC-2841",
-    date: "29 ago 2026",
-    product: "Film stretch industrial",
-    supplier: "Distribuidora Centro",
-    quantity: "20 rollos",
-    total: 142000,
-    mandate: "MD-001 · v3",
-    card: "•••• 4821",
-    transaction: "0x81c2...4f90",
-    status: "Comprada",
-  },
-  {
-    id: "OC-2827",
-    date: "22 ago 2026",
-    product: "Guantes de nitrilo",
-    supplier: "Proveeduría Norte",
-    quantity: "8 cajas",
-    total: 98400,
-    mandate: "MD-002 · v2",
-    card: "•••• 1906",
-    transaction: "0x2d19...a782",
-    status: "Comprada",
-  },
-  {
-    id: "OC-2788",
-    date: "14 ago 2026",
-    product: "Film stretch industrial",
-    supplier: "PackAR",
-    quantity: "20 rollos",
-    total: 149800,
-    mandate: "MD-001 · v2",
-    card: "•••• 7334",
-    transaction: "0x749a...118c",
-    status: "Comprada",
-  },
-];
+const purchases = [];
 
-const mandateActivity = {
-  "MD-001": [
-    { time: "10:24", title: "Compra confirmada", detail: "Distribuidora Centro confirmó la orden OC-2841.", type: "success" },
-    { time: "10:23", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 4821 por $142.000, válida para un solo uso.", type: "card" },
-    { time: "10:23", title: "Autorización registrada", detail: "Transacción mock confirmada en Polygon · Demo.", type: "chain" },
-    { time: "10:22", title: "Saldo retirado", detail: "$142.000 retirados de la cuenta operativa.", type: "account" },
-    { time: "10:22", title: "Proveedor cambiado", detail: "El agente eligió Distribuidora Centro en lugar de PackAR.", type: "supplier" },
-    { time: "10:21", title: "8 ofertas encontradas", detail: "Se compararon precio, disponibilidad y entrega.", type: "search" },
-    { time: "10:20", title: "Búsqueda iniciada", detail: "Ejecución programada por cron.", type: "search" },
-  ],
-  "MD-002": [
-    { time: "09:11", title: "Compra confirmada", detail: "Proveeduría Norte confirmó la orden OC-2827.", type: "success" },
-    { time: "09:10", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 1906 por $98.400.", type: "card" },
-    { time: "09:08", title: "Búsqueda completada", detail: "Se encontraron 5 ofertas válidas.", type: "search" },
-  ],
-  "MD-003": [
-    { time: "16:42", title: "Sin ofertas válidas", detail: "Las 4 opciones encontradas superaron el precio máximo.", type: "search" },
-    { time: "16:40", title: "Búsqueda iniciada", detail: "Ejecución de prueba del borrador.", type: "search" },
-  ],
-};
+const mandateActivity = {};
 
-const mandateOffers = {
-  "MD-001": [
-    { supplier: "Distribuidora Centro", unitPrice: 7100, delivery: "48 h", score: 94, result: "Elegida" },
-    { supplier: "PackAR", unitPrice: 8000, delivery: "24 h", score: 88, result: "Descartada" },
-    { supplier: "FlexPack Córdoba", unitPrice: 7480, delivery: "72 h", score: 84, result: "Descartada" },
-  ],
-  "MD-002": [
-    { supplier: "Proveeduría Norte", unitPrice: 12300, delivery: "3 días", score: 92, result: "Elegida" },
-    { supplier: "Seguridad Industrial SA", unitPrice: 12550, delivery: "5 días", score: 81, result: "Descartada" },
-  ],
-  "MD-003": [
-    { supplier: "Hidráulica Federal", unitPrice: 101500, delivery: "4 días", score: 68, result: "Fuera de límite" },
-  ],
-};
+const mandateOffers = {};
 
 const currency = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -766,15 +570,15 @@ function AccountPage() {
         <article className="balance-card">
           <div className="account-card-heading"><Building2 size={18} /><span>CUENTA DE ORIGEN</span></div>
           <p>Saldo disponible</p>
-          <strong>{currency.format(1108000)}</strong>
-          <div className="account-number"><span>Cuenta operativa ARS</span><em>•••• 1842</em></div>
+          <strong>—</strong>
+          <div className="account-number"><span>Cuenta operativa ARS</span><em>—</em></div>
         </article>
 
         <article className="account-panel">
           <div className="account-card-heading"><CreditCard size={18} /><span>MÉTODO PREFERIDO</span></div>
           <div className="payment-method-mock">
             <span>Tarjeta empresa</span>
-            <strong>•••• 4242</strong>
+            <strong>—</strong>
             <small>Se usa para fondear chk! fund cuando el agente decide comprar.</small>
           </div>
           <button className="account-secondary-button">Cambiar método</button>
@@ -784,7 +588,7 @@ function AccountPage() {
           <div className="account-card-heading"><WalletCards size={18} /><span>CHK! FUND</span></div>
           <div className="fund-stats">
             <div><span>En proceso</span><strong>{currency.format(0)}</strong></div>
-            <div><span>Ejecutado este mes</span><strong>{currency.format(240400)}</strong></div>
+            <div><span>Ejecutado este mes</span><strong>{currency.format(0)}</strong></div>
             <div><span>Reintegros</span><strong>{currency.format(0)}</strong></div>
           </div>
           <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar y se consumen al emitir la tarjeta virtual.</p>
@@ -816,14 +620,7 @@ function AccountPage() {
 
       <article className="account-movements">
         <div className="account-card-heading"><History size={18} /><span>ÚLTIMOS MOVIMIENTOS</span></div>
-        <div className="movement-row">
-          <div><strong>Compra OC-2841</strong><span>Film stretch · Distribuidora Centro</span></div>
-          <div><strong>-{currency.format(142000)}</strong><span>29 ago · 10:22</span></div>
-        </div>
-        <div className="movement-row">
-          <div><strong>Compra OC-2827</strong><span>Guantes de nitrilo · Proveeduría Norte</span></div>
-          <div><strong>-{currency.format(98400)}</strong><span>22 ago · 09:09</span></div>
-        </div>
+        <p className="empty-copy">No hay movimientos todavía.</p>
       </article>
     </section>
   );
@@ -969,17 +766,14 @@ function WhatsappPage() {
 }
 
 function NotificationsInbox() {
-  const notices = [
-    { icon: Store, type: "Proveedor cambiado", title: "Distribuidora Centro reemplazó a PackAR", detail: "Film stretch · 12% más económico y entrega en 48 horas.", meta: "MD-001 · Hoy, 10:22", channel: "WhatsApp enviado" },
-    { icon: CheckCircle2, type: "Compra realizada", title: "Compra OC-2841 confirmada", detail: "20 rollos de film stretch por $142.000.", meta: "MD-001 · Hoy, 10:24", channel: "WhatsApp enviado" },
-    { icon: ShieldCheck, type: "Mandato activado", title: "Mandato v3 registrado en Polygon", detail: "La política está activa y disponible para verificación del vendedor.", meta: "MD-001 · 15 ago, 14:32", channel: "Solo en la app" },
-    { icon: Clock3, type: "Sin ofertas válidas", title: "No se pudo completar la búsqueda", detail: "Las ofertas de aceite hidráulico superaron el precio máximo.", meta: "MD-003 · Ayer, 16:42", channel: "WhatsApp enviado" },
-  ];
+  const notices = [];
 
   return (
     <div className="notifications-layout">
       <div className="notifications-list">
-        {notices.map((notice) => {
+        {notices.length === 0 ? (
+          <p className="empty-copy">No hay avisos todavía.</p>
+        ) : notices.map((notice) => {
           const Icon = notice.icon;
           return (
             <article className="notification-item" key={`${notice.type}-${notice.meta}`}>
@@ -992,10 +786,8 @@ function NotificationsInbox() {
       </div>
       <aside className="notifications-summary">
         <span>HOY</span>
-        <strong>2</strong>
+        <strong>0</strong>
         <p>avisos enviados por WhatsApp</p>
-        <div><span>Proveedor cambiado</span><em>1</em></div>
-        <div><span>Compra realizada</span><em>1</em></div>
       </aside>
     </div>
   );
