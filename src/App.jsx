@@ -27,23 +27,23 @@ import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisp
 const tabs = [
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "demo", label: "Live demo", icon: ShieldCheck },
-  { id: "mandates", label: "Mandatos", icon: ClipboardList },
-  { id: "history", label: "Historial", icon: History },
-  { id: "account", label: "Cuenta", icon: WalletCards },
-  { id: "whatsapp", label: "Avisos", icon: Bell },
+  { id: "mandates", label: "Mandates", icon: ClipboardList },
+  { id: "history", label: "History", icon: History },
+  { id: "account", label: "Account", icon: WalletCards },
+  { id: "whatsapp", label: "Alerts", icon: Bell },
 ];
 
 const initialMessages = [
   {
     id: 1,
     role: "user",
-    content: "Necesito reponer 20 rollos de film stretch de 500 metros cada 15 días. No quiero pagar más de $8.500 por rollo.",
+    content: "I need to restock 20 rolls of 500-meter stretch film every 15 days. I don't want to pay more than $8,500 per roll.",
     time: "09:40",
   },
   {
     id: 2,
     role: "agent",
-    content: "Entendido. Para que vos, el agente y los proveedores trabajemos con las mismas reglas, preparé un borrador estandarizado del mandato.",
+    content: "Got it. So that you, the agent and the suppliers all work from the same rules, I've prepared a standardized draft of the mandate.",
     time: "09:41",
   },
   {
@@ -53,14 +53,14 @@ const initialMessages = [
     time: "09:41",
     draft: {
       version: 4,
-      product: "Film stretch industrial",
-      specification: "50 cm x 500 m · 23 micrones",
-      quantity: "Hasta 20 rollos",
-      frequency: "Cada 15 días",
-      unitLimit: "$8.500",
-      totalLimit: "$500.000",
-      expiration: "30 sep 2026",
-      paymentMethod: "Tarjeta empresa · •••• 4242",
+      product: "Industrial stretch film",
+      specification: "50 cm x 500 m · 23 microns",
+      quantity: "Up to 20 rolls",
+      frequency: "Every 15 days",
+      unitLimit: "$8,500",
+      totalLimit: "$500,000",
+      expiration: "Sep 30, 2026",
+      paymentMethod: "Company card · •••• 4242",
     },
   },
 ];
@@ -68,98 +68,98 @@ const initialMessages = [
 const initialMandateViews = [
   {
     id: "MD-001",
-    product: "Film stretch industrial",
-    description: "Rollo de 50 cm x 500 m, 23 micrones",
-    status: "Activo",
-    frequency: "Cada 15 días",
-    quantity: "Hasta 20 rollos",
+    product: "Industrial stretch film",
+    description: "50 cm x 500 m roll, 23 microns",
+    status: "Active",
+    frequency: "Every 15 days",
+    quantity: "Up to 20 rolls",
     unitPrice: 8500,
     monthlyBudget: 500000,
-    suppliers: "PackAR y Distribuidora Centro",
-    expires: "30 sep 2026",
+    suppliers: "PackAR and Distribuidora Centro",
+    expires: "Sep 30, 2026",
     version: 3,
     owner: "0x71A4...92F1",
     agent: "chk! Buyer",
     agentAddress: "0xA91C...4E20",
     paymentDelegate: "VirtualCardAdapter",
-    validAfter: "1 ago 2026",
+    validAfter: "Aug 1, 2026",
     maxPerOperation: 170000,
     spent: 291800,
     reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
+    allowedActions: ["Search offers", "Choose supplier", "Buy automatically"],
     policyHash: "0x9f8a7c4e...13bd92a1",
-    account: "Cuenta operativa ARS · •••• 1842",
+    account: "ARS operating account · •••• 1842",
     accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
+    paymentMethod: "Single-use virtual card",
     currentSupplier: "Distribuidora Centro",
     previousSupplier: "PackAR",
-    supplierReason: "12% más económico y entrega dentro de las 48 horas.",
-    lastRun: "29 ago 2026 · 10:24",
-    nextRun: "12 sep 2026 · 08:00",
+    supplierReason: "12% cheaper and delivers within 48 hours.",
+    lastRun: "Aug 29, 2026 · 10:24",
+    nextRun: "Sep 12, 2026 · 08:00",
     lastCard: "•••• 4821",
   },
   {
     id: "MD-002",
-    product: "Guantes de nitrilo",
-    description: "Caja x 100 unidades, talle M, sin polvo",
-    status: "Activo",
-    frequency: "Mensual",
-    quantity: "Hasta 12 cajas",
+    product: "Nitrile gloves",
+    description: "Box of 100, size M, powder-free",
+    status: "Active",
+    frequency: "Monthly",
+    quantity: "Up to 12 boxes",
     unitPrice: 12600,
     monthlyBudget: 151200,
     suppliers: "Proveeduría Norte",
-    expires: "15 oct 2026",
+    expires: "Oct 15, 2026",
     version: 2,
     owner: "0x71A4...92F1",
     agent: "chk! Buyer",
     agentAddress: "0xB281...9C15",
     paymentDelegate: "VirtualCardAdapter",
-    validAfter: "15 jul 2026",
+    validAfter: "Jul 15, 2026",
     maxPerOperation: 151200,
     spent: 98400,
     reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
+    allowedActions: ["Search offers", "Choose supplier", "Buy automatically"],
     policyHash: "0x4b18d620...8f31b781",
-    account: "Cuenta operativa ARS · •••• 1842",
+    account: "ARS operating account · •••• 1842",
     accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
+    paymentMethod: "Single-use virtual card",
     currentSupplier: "Proveeduría Norte",
     previousSupplier: "Proveeduría Norte",
-    supplierReason: "Mantuvo el mejor equilibrio entre precio y disponibilidad.",
-    lastRun: "22 ago 2026 · 09:11",
-    nextRun: "3 sep 2026 · 08:00",
+    supplierReason: "Kept the best balance of price and availability.",
+    lastRun: "Aug 22, 2026 · 09:11",
+    nextRun: "Sep 3, 2026 · 08:00",
     lastCard: "•••• 1906",
   },
   {
     id: "MD-003",
-    product: "Aceite hidráulico ISO 46",
-    description: "Tambor de 20 litros, norma DIN 51524",
-    status: "Borrador",
-    frequency: "Cada 60 días",
-    quantity: "Hasta 4 tambores",
+    product: "ISO 46 hydraulic oil",
+    description: "20-liter drum, DIN 51524 standard",
+    status: "Draft",
+    frequency: "Every 60 days",
+    quantity: "Up to 4 drums",
     unitPrice: 92000,
     monthlyBudget: 368000,
-    suppliers: "A definir",
-    expires: "30 nov 2026",
+    suppliers: "To be defined",
+    expires: "Nov 30, 2026",
     version: 1,
     owner: "0x71A4...92F1",
     agent: "chk! Buyer",
     agentAddress: "0xA91C...4E20",
     paymentDelegate: "VirtualCardAdapter",
-    validAfter: "Pendiente de activación",
+    validAfter: "Pending activation",
     maxPerOperation: 368000,
     spent: 0,
     reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor"],
+    allowedActions: ["Search offers", "Choose supplier"],
     policyHash: "0x7c941d02...c4af7710",
-    account: "Cuenta operativa ARS · •••• 1842",
+    account: "ARS operating account · •••• 1842",
     accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Sin seleccionar",
+    paymentMethod: "Single-use virtual card",
+    currentSupplier: "Not selected",
     previousSupplier: "—",
-    supplierReason: "Todavía no se ejecutó una compra.",
-    lastRun: "28 ago 2026 · 16:42",
-    nextRun: "Sin programar",
+    supplierReason: "No purchase has run yet.",
+    lastRun: "Aug 28, 2026 · 16:42",
+    nextRun: "Not scheduled",
     lastCard: "—",
   },
 ];
@@ -178,79 +178,79 @@ const initialMandates = initialMandateViews.map((mandate) => ({
 const purchases = [
   {
     id: "OC-2841",
-    date: "29 ago 2026",
-    product: "Film stretch industrial",
+    date: "Aug 29, 2026",
+    product: "Industrial stretch film",
     supplier: "Distribuidora Centro",
-    quantity: "20 rollos",
+    quantity: "20 rolls",
     total: 142000,
     mandate: "MD-001 · v3",
     card: "•••• 4821",
     transaction: "0x81c2...4f90",
-    status: "Comprada",
+    status: "Purchased",
   },
   {
     id: "OC-2827",
-    date: "22 ago 2026",
-    product: "Guantes de nitrilo",
+    date: "Aug 22, 2026",
+    product: "Nitrile gloves",
     supplier: "Proveeduría Norte",
-    quantity: "8 cajas",
+    quantity: "8 boxes",
     total: 98400,
     mandate: "MD-002 · v2",
     card: "•••• 1906",
     transaction: "0x2d19...a782",
-    status: "Comprada",
+    status: "Purchased",
   },
   {
     id: "OC-2788",
-    date: "14 ago 2026",
-    product: "Film stretch industrial",
+    date: "Aug 14, 2026",
+    product: "Industrial stretch film",
     supplier: "PackAR",
-    quantity: "20 rollos",
+    quantity: "20 rolls",
     total: 149800,
     mandate: "MD-001 · v2",
     card: "•••• 7334",
     transaction: "0x749a...118c",
-    status: "Comprada",
+    status: "Purchased",
   },
 ];
 
 const mandateActivity = {
   "MD-001": [
-    { time: "10:24", title: "Compra confirmada", detail: "Distribuidora Centro confirmó la orden OC-2841.", type: "success" },
-    { time: "10:23", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 4821 por $142.000, válida para un solo uso.", type: "card" },
-    { time: "10:23", title: "Autorización registrada", detail: "Transacción mock confirmada en Polygon · Demo.", type: "chain" },
-    { time: "10:22", title: "Saldo retirado", detail: "$142.000 retirados de la cuenta operativa.", type: "account" },
-    { time: "10:22", title: "Proveedor cambiado", detail: "El agente eligió Distribuidora Centro en lugar de PackAR.", type: "supplier" },
-    { time: "10:21", title: "8 ofertas encontradas", detail: "Se compararon precio, disponibilidad y entrega.", type: "search" },
-    { time: "10:20", title: "Búsqueda iniciada", detail: "Ejecución programada por cron.", type: "search" },
+    { time: "10:24", title: "Purchase confirmed", detail: "Distribuidora Centro confirmed order OC-2841.", type: "success" },
+    { time: "10:23", title: "Virtual card issued", detail: "Card •••• 4821 for $142,000, valid for a single use.", type: "card" },
+    { time: "10:23", title: "Authorization recorded", detail: "Mock transaction confirmed on Polygon · Demo.", type: "chain" },
+    { time: "10:22", title: "Funds withdrawn", detail: "$142,000 withdrawn from the operating account.", type: "account" },
+    { time: "10:22", title: "Supplier switched", detail: "The agent chose Distribuidora Centro over PackAR.", type: "supplier" },
+    { time: "10:21", title: "8 offers found", detail: "Price, availability and delivery were compared.", type: "search" },
+    { time: "10:20", title: "Search started", detail: "Run scheduled by cron.", type: "search" },
   ],
   "MD-002": [
-    { time: "09:11", title: "Compra confirmada", detail: "Proveeduría Norte confirmó la orden OC-2827.", type: "success" },
-    { time: "09:10", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 1906 por $98.400.", type: "card" },
-    { time: "09:08", title: "Búsqueda completada", detail: "Se encontraron 5 ofertas válidas.", type: "search" },
+    { time: "09:11", title: "Purchase confirmed", detail: "Proveeduría Norte confirmed order OC-2827.", type: "success" },
+    { time: "09:10", title: "Virtual card issued", detail: "Card •••• 1906 for $98,400.", type: "card" },
+    { time: "09:08", title: "Search completed", detail: "5 valid offers were found.", type: "search" },
   ],
   "MD-003": [
-    { time: "16:42", title: "Sin ofertas válidas", detail: "Las 4 opciones encontradas superaron el precio máximo.", type: "search" },
-    { time: "16:40", title: "Búsqueda iniciada", detail: "Ejecución de prueba del borrador.", type: "search" },
+    { time: "16:42", title: "No valid offers", detail: "All 4 options found exceeded the maximum price.", type: "search" },
+    { time: "16:40", title: "Search started", detail: "Test run of the draft.", type: "search" },
   ],
 };
 
 const mandateOffers = {
   "MD-001": [
-    { supplier: "Distribuidora Centro", unitPrice: 7100, delivery: "48 h", score: 94, result: "Elegida" },
-    { supplier: "PackAR", unitPrice: 8000, delivery: "24 h", score: 88, result: "Descartada" },
-    { supplier: "FlexPack Córdoba", unitPrice: 7480, delivery: "72 h", score: 84, result: "Descartada" },
+    { supplier: "Distribuidora Centro", unitPrice: 7100, delivery: "48 h", score: 94, result: "Chosen" },
+    { supplier: "PackAR", unitPrice: 8000, delivery: "24 h", score: 88, result: "Ruled out" },
+    { supplier: "FlexPack Córdoba", unitPrice: 7480, delivery: "72 h", score: 84, result: "Ruled out" },
   ],
   "MD-002": [
-    { supplier: "Proveeduría Norte", unitPrice: 12300, delivery: "3 días", score: 92, result: "Elegida" },
-    { supplier: "Seguridad Industrial SA", unitPrice: 12550, delivery: "5 días", score: 81, result: "Descartada" },
+    { supplier: "Proveeduría Norte", unitPrice: 12300, delivery: "3 days", score: 92, result: "Chosen" },
+    { supplier: "Seguridad Industrial SA", unitPrice: 12550, delivery: "5 days", score: 81, result: "Ruled out" },
   ],
   "MD-003": [
-    { supplier: "Hidráulica Federal", unitPrice: 101500, delivery: "4 días", score: 68, result: "Fuera de límite" },
+    { supplier: "Hidráulica Federal", unitPrice: 101500, delivery: "4 days", score: 68, result: "Over limit" },
   ],
 };
 
-const currency = new Intl.NumberFormat("es-AR", {
+const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "ARS",
   maximumFractionDigits: 0,
@@ -299,7 +299,7 @@ function App() {
               onBack={() => setSelectedMandateId(null)}
               onRevoke={(mandateId) => setMandates((current) => current.map((item) => item.id === mandateId ? {
                 ...item,
-                status: "Revocado",
+                status: "Revoked",
                 canonical: { ...item.canonical, status: "Revoked" },
               } : item))}
             />
@@ -326,7 +326,7 @@ function Header({ activeTab, onTabChange }) {
         <button className="brand" onClick={() => onTabChange("chat")}>
           <span className="brand-name">chk! <span>Buyer</span></span>
         </button>
-        <nav className="tabs" aria-label="Navegación principal">
+        <nav className="tabs" aria-label="Main navigation">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -355,7 +355,7 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
     if (!content) return;
     onMessagesChange((current) => [
       ...current,
-      { id: crypto.randomUUID(), role: "user", content, time: "Ahora" },
+      { id: crypto.randomUUID(), role: "user", content, time: "Now" },
     ]);
     setMessage("");
   }
@@ -368,8 +368,8 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
       {
         id: crypto.randomUUID(),
         role: "agent",
-        content: "Mandato v4 firmado y registrado en Polygon · Demo. Ya puedo comenzar con chk! it out.",
-        time: "Ahora",
+        content: "Mandate v4 signed and recorded on Polygon · Demo. I can start with chk! it out now.",
+        time: "Now",
       },
     ]);
   }
@@ -380,14 +380,14 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
         <aside className="mandates-overview">
           <div className="overview-header">
             <div>
-              <span>MANDATOS ACTIVOS</span>
-              <h2>Tus productos</h2>
+              <span>ACTIVE MANDATES</span>
+              <h2>Your products</h2>
             </div>
-            <span className="overview-count">{mandates.filter((item) => item.status === "Activo").length}</span>
+            <span className="overview-count">{mandates.filter((item) => item.status === "Active").length}</span>
           </div>
 
           <div className="overview-list">
-            {mandates.filter((item) => item.status === "Activo").map((mandate) => (
+            {mandates.filter((item) => item.status === "Active").map((mandate) => (
               <button
                 type="button"
                 className="overview-card"
@@ -401,25 +401,25 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
                 <h3>{mandate.product}</h3>
                 <p>{mandate.description}</p>
                 <dl>
-                  <div><dt>Reposición</dt><dd>{mandate.frequency}</dd></div>
-                  <div><dt>Tope unitario</dt><dd>{currency.format(mandate.unitPrice)}</dd></div>
+                  <div><dt>Restocking</dt><dd>{mandate.frequency}</dd></div>
+                  <div><dt>Unit cap</dt><dd>{currency.format(mandate.unitPrice)}</dd></div>
                 </dl>
               </button>
             ))}
           </div>
 
           <button className="overview-link" onClick={onOpenMandates}>
-            Ver todos los mandatos <ChevronRight size={16} />
+            See all mandates <ChevronRight size={16} />
           </button>
         </aside>
 
         <div className="chat-shell">
           <div className="chat-topbar">
-            <div><strong>chk! Buyer</strong><span>Tu agente de compras</span></div>
+            <div><strong>chk! Buyer</strong><span>Your purchasing agent</span></div>
           </div>
           <div className="conversation">
             <div className="message-list">
-              <div className="conversation-date">HOY</div>
+              <div className="conversation-date">TODAY</div>
               {messages.map((item) => (
                 <div className={`chat-message ${item.role}`} key={item.id}>
                   <div>
@@ -428,7 +428,7 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
                         draft={item.draft}
                         approved={draftApproved}
                         onApprove={approveDraft}
-                        onEdit={() => setMessage("Quiero modificar: ")}
+                        onEdit={() => setMessage("I'd like to change: ")}
                       />
                     ) : <p>{item.content}</p>}
                     <span>{item.time}</span>
@@ -448,10 +448,10 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
                   sendMessage(event);
                 }
               }}
-              placeholder="Escribí un mensaje..."
-              aria-label="Mensaje para el agente"
+              placeholder="Write a message..."
+              aria-label="Message for the agent"
             />
-            <button type="submit" disabled={!message.trim()} aria-label="Enviar mensaje"><Send size={17} /></button>
+            <button type="submit" disabled={!message.trim()} aria-label="Send message"><Send size={17} /></button>
           </form>
         </div>
       </div>
@@ -463,22 +463,22 @@ function MandateDraftCard({ draft, approved, onApprove, onEdit }) {
   return (
     <article className="draft-card">
       <div className="draft-card-header">
-        <div><span>MANDATE DRAFT</span><strong>Borrador v{draft.version}</strong></div>
-        <em>{approved ? "Firmado" : "Sin firmar"}</em>
+        <div><span>MANDATE DRAFT</span><strong>Draft v{draft.version}</strong></div>
+        <em>{approved ? "Signed" : "Unsigned"}</em>
       </div>
       <div className="draft-product"><strong>{draft.product}</strong><span>{draft.specification}</span></div>
       <dl>
-        <DataRow label="Cantidad" value={draft.quantity} />
-        <DataRow label="Frecuencia" value={draft.frequency} />
-        <DataRow label="Máximo por unidad" value={draft.unitLimit} />
-        <DataRow label="Límite total" value={draft.totalLimit} />
-        <DataRow label="Vigencia" value={draft.expiration} />
-        <DataRow label="Método" value={draft.paymentMethod} />
+        <DataRow label="Quantity" value={draft.quantity} />
+        <DataRow label="Frequency" value={draft.frequency} />
+        <DataRow label="Max per unit" value={draft.unitLimit} />
+        <DataRow label="Total limit" value={draft.totalLimit} />
+        <DataRow label="Valid until" value={draft.expiration} />
+        <DataRow label="Method" value={draft.paymentMethod} />
       </dl>
       <div className="draft-actions">
-        <button onClick={onEdit} disabled={approved}>Seguir editando</button>
+        <button onClick={onEdit} disabled={approved}>Keep editing</button>
         <button className="approve-draft" onClick={onApprove} disabled={approved}>
-          {approved ? <><Check size={14} />Mandato firmado</> : <>Revisar y firmar <ArrowRight size={14} /></>}
+          {approved ? <><Check size={14} />Mandate signed</> : <>Review and sign <ArrowRight size={14} /></>}
         </button>
       </div>
     </article>
@@ -489,8 +489,8 @@ function MandatesPage({ mandates, onCreate, onSelect }) {
   return (
     <section className="page">
       <div className="page-toolbar">
-        <div className="list-summary"><span>{mandates.length} mandatos</span><span>{mandates.filter((item) => item.status === "Activo").length} activos</span></div>
-        <button className="primary-button" onClick={onCreate}><Plus size={17} />Nuevo mandato</button>
+        <div className="list-summary"><span>{mandates.length} mandates</span><span>{mandates.filter((item) => item.status === "Active").length} active</span></div>
+        <button className="primary-button" onClick={onCreate}><Plus size={17} />New mandate</button>
       </div>
       <div className="mandate-list">
         {mandates.map((mandate) => (
@@ -501,8 +501,8 @@ function MandatesPage({ mandates, onCreate, onSelect }) {
                   <strong>{mandate.product}</strong>
                   <small>{mandate.description}</small>
                 </div>
-                <div className="mandate-field"><span>Reposición</span><strong>{mandate.frequency}</strong></div>
-                <div className="mandate-field"><span>Precio máximo</span><strong>{currency.format(mandate.unitPrice)}</strong></div>
+                <div className="mandate-field"><span>Restocking</span><strong>{mandate.frequency}</strong></div>
+                <div className="mandate-field"><span>Max price</span><strong>{currency.format(mandate.unitPrice)}</strong></div>
                 <Status value={mandate.status} />
                 <ChevronRight className="mandate-chevron" size={18} />
               </button>
@@ -514,10 +514,10 @@ function MandatesPage({ mandates, onCreate, onSelect }) {
 }
 
 const mandateSections = [
-  { id: "detail", label: "Detalle" },
-  { id: "activity", label: "Actividad" },
-  { id: "offers", label: "Ofertas" },
-  { id: "purchases", label: "Compras" },
+  { id: "detail", label: "Details" },
+  { id: "activity", label: "Activity" },
+  { id: "offers", label: "Offers" },
+  { id: "purchases", label: "Purchases" },
 ];
 
 function MandateDetailPage({ mandate, onBack, onRevoke }) {
@@ -530,7 +530,7 @@ function MandateDetailPage({ mandate, onBack, onRevoke }) {
 
   return (
     <section className="page mandate-detail-page">
-      <button className="back-button" onClick={onBack}><ArrowLeft size={16} />Volver a mandatos</button>
+      <button className="back-button" onClick={onBack}><ArrowLeft size={16} />Back to mandates</button>
 
       <div className="detail-hero">
         <div>
@@ -540,24 +540,24 @@ function MandateDetailPage({ mandate, onBack, onRevoke }) {
         </div>
         <div className="detail-hero-actions">
           <div className="detail-hero-meta">
-            <span>Revisión</span>
+            <span>Revision</span>
             <strong>v{mandate.version}</strong>
           </div>
-          {mandate.status === "Activo" && (
-            <button className="revoke-button" onClick={() => setConfirmingRevoke(true)}>Revocar mandato</button>
+          {mandate.status === "Active" && (
+            <button className="revoke-button" onClick={() => setConfirmingRevoke(true)}>Revoke mandate</button>
           )}
         </div>
       </div>
 
       {confirmingRevoke && (
         <div className="revoke-confirmation">
-          <div><strong>¿Revocar este mandato ahora?</strong><p>Las próximas autorizaciones fallarán. Las compras ya confirmadas no se cancelan.</p></div>
-          <button onClick={() => setConfirmingRevoke(false)}>Volver</button>
-          <button onClick={() => { onRevoke(mandate.id); setConfirmingRevoke(false); }}>Confirmar revocación</button>
+          <div><strong>Revoke this mandate now?</strong><p>Future authorizations will fail. Purchases already confirmed are not cancelled.</p></div>
+          <button onClick={() => setConfirmingRevoke(false)}>Back</button>
+          <button onClick={() => { onRevoke(mandate.id); setConfirmingRevoke(false); }}>Confirm revocation</button>
         </div>
       )}
 
-      <nav className="mandate-subnav" aria-label="Secciones del mandato">
+      <nav className="mandate-subnav" aria-label="Mandate sections">
         {mandateSections.map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
             {item.label}
@@ -580,76 +580,76 @@ function MandateDetailPage({ mandate, onBack, onRevoke }) {
 function MandateSummary({ mandate, available, activity, purchases: relatedPurchases }) {
   const lastPurchase = relatedPurchases[0];
   const executionSteps = lastPurchase ? [
-    { label: "chk! it out · oferta elegida", detail: `${lastPurchase.quantity} a ${lastPurchase.supplier}` },
-    { label: "write the chk! · saldo retirado", detail: `${currency.format(lastPurchase.total)} → chk! fund` },
-    { label: "Autorización registrada", detail: `Polygon · Demo · ${lastPurchase.transaction}` },
-    { label: "Tarjeta virtual generada", detail: `${lastPurchase.card} · un solo uso` },
-    { label: "Mandato validado por el vendedor", detail: "Activo · agente y monto autorizados" },
-    { label: "Compra confirmada", detail: lastPurchase.id },
+    { label: "chk! it out · offer chosen", detail: `${lastPurchase.quantity} from ${lastPurchase.supplier}` },
+    { label: "write the chk! · funds withdrawn", detail: `${currency.format(lastPurchase.total)} → chk! fund` },
+    { label: "Authorization recorded", detail: `Polygon · Demo · ${lastPurchase.transaction}` },
+    { label: "Virtual card issued", detail: `${lastPurchase.card} · single use` },
+    { label: "Mandate validated by the merchant", detail: "Active · agent and amount authorized" },
+    { label: "Purchase confirmed", detail: lastPurchase.id },
   ] : [];
 
   return (
     <div className="mandate-section-content">
       <div className="mandate-metrics">
-        <Metric label="Disponible" value={currency.format(available)} />
-        <Metric label="Gastado" value={currency.format(mandate.spent)} />
-        <Metric label="Reservado" value={currency.format(mandate.reserved)} />
-        <Metric label="Máximo por compra" value={currency.format(mandate.maxPerOperation)} />
+        <Metric label="Available" value={currency.format(available)} />
+        <Metric label="Spent" value={currency.format(mandate.spent)} />
+        <Metric label="Reserved" value={currency.format(mandate.reserved)} />
+        <Metric label="Max per purchase" value={currency.format(mandate.maxPerOperation)} />
       </div>
 
       <div className="mandate-detail-grid">
         <article className="detail-panel">
-          <div className="panel-heading"><ClipboardList size={17} /><h2>Reglas del mandato</h2></div>
+          <div className="panel-heading"><ClipboardList size={17} /><h2>Mandate rules</h2></div>
           <dl className="detail-data-list">
-            <DataRow label="Cantidad máxima" value={mandate.quantity} />
-            <DataRow label="Reposición" value={mandate.frequency} />
-            <DataRow label="Precio unitario máximo" value={currency.format(mandate.unitPrice)} />
-            <DataRow label="Presupuesto total" value={currency.format(mandate.monthlyBudget)} />
-            <DataRow label="Vigencia" value={`${mandate.validAfter} — ${mandate.expires}`} />
-            <DataRow label="Agente autorizado" value={`${mandate.agent} · ${mandate.agentAddress}`} />
+            <DataRow label="Max quantity" value={mandate.quantity} />
+            <DataRow label="Restocking" value={mandate.frequency} />
+            <DataRow label="Max unit price" value={currency.format(mandate.unitPrice)} />
+            <DataRow label="Total budget" value={currency.format(mandate.monthlyBudget)} />
+            <DataRow label="Valid" value={`${mandate.validAfter} — ${mandate.expires}`} />
+            <DataRow label="Authorized agent" value={`${mandate.agent} · ${mandate.agentAddress}`} />
           </dl>
           <div className="allowed-actions">
-            <span>Acciones permitidas</span>
+            <span>Allowed actions</span>
             <div>{mandate.allowedActions.map((action) => <em key={action}>{action}</em>)}</div>
           </div>
         </article>
 
         <article className="detail-panel supplier-panel">
-          <div className="panel-heading"><Store size={17} /><h2>Proveedor elegido</h2></div>
+          <div className="panel-heading"><Store size={17} /><h2>Chosen supplier</h2></div>
           <strong className="selected-supplier">{mandate.currentSupplier}</strong>
           <p>{mandate.supplierReason}</p>
           <dl className="detail-data-list compact">
-            <DataRow label="Proveedor anterior" value={mandate.previousSupplier} />
-            <DataRow label="Última búsqueda" value={mandate.lastRun} />
-            <DataRow label="Próxima búsqueda" value={mandate.nextRun} />
+            <DataRow label="Previous supplier" value={mandate.previousSupplier} />
+            <DataRow label="Last search" value={mandate.lastRun} />
+            <DataRow label="Next search" value={mandate.nextRun} />
           </dl>
         </article>
 
         <article className="detail-panel payment-panel">
-          <div className="panel-heading"><WalletCards size={17} /><h2>Cuenta y método</h2></div>
+          <div className="panel-heading"><WalletCards size={17} /><h2>Account and method</h2></div>
           <dl className="detail-data-list">
-            <DataRow label="Cuenta" value={mandate.account} />
-            <DataRow label="Saldo actual" value={currency.format(mandate.accountBalance)} />
-            <DataRow label="Método" value={mandate.paymentMethod} />
-            <DataRow label="Última tarjeta" value={mandate.lastCard} />
+            <DataRow label="Account" value={mandate.account} />
+            <DataRow label="Current balance" value={currency.format(mandate.accountBalance)} />
+            <DataRow label="Method" value={mandate.paymentMethod} />
+            <DataRow label="Last card" value={mandate.lastCard} />
             <DataRow label="Payment delegate" value={mandate.paymentDelegate} />
           </dl>
         </article>
 
         <article className="detail-panel execution-panel">
-          <div className="panel-heading"><CreditCard size={17} /><h2>Última compra</h2></div>
+          <div className="panel-heading"><CreditCard size={17} /><h2>Last purchase</h2></div>
           {executionSteps.length > 0 ? (
             <div className="execution-steps">
               {executionSteps.map((step) => (
                 <div key={step.label}><i><Check size={12} /></i><span><strong>{step.label}</strong><small>{step.detail}</small></span></div>
               ))}
             </div>
-          ) : <p className="empty-copy">Este mandato todavía no realizó compras.</p>}
+          ) : <p className="empty-copy">This mandate has not made any purchases yet.</p>}
         </article>
       </div>
 
       <article className="detail-panel recent-activity-panel">
-        <div className="panel-heading"><Clock3 size={17} /><h2>Actividad reciente</h2></div>
+        <div className="panel-heading"><Clock3 size={17} /><h2>Recent activity</h2></div>
         <div className="recent-activity-list">
           {activity.slice(0, 4).map((event) => (
             <div key={`${event.time}-${event.title}`}><span>{event.time}</span><strong>{event.title}</strong><p>{event.detail}</p></div>
@@ -660,26 +660,26 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
       {lastPurchase && (
         <article className="merchant-verification-panel">
           <div className="merchant-verification-copy">
-            <span>PRESENTACIÓN AL VENDEDOR · DEMO</span>
-            <h2>{lastPurchase.supplier} aceptó la compra</h2>
-            <p>El vendedor verificó la autorización actual contra MandateVault sin acceder a la política privada completa.</p>
+            <span>PRESENTED TO THE MERCHANT · DEMO</span>
+            <h2>{lastPurchase.supplier} accepted the purchase</h2>
+            <p>The merchant verified the current authorization against MandateVault without accessing the full private policy.</p>
           </div>
           <div className="merchant-checks">
-            <span><Check size={13} />Mandato activo</span>
-            <span><Check size={13} />Agente autorizado</span>
-            <span><Check size={13} />Monto dentro del límite</span>
-            <span><Check size={13} />Autorización de un uso válida</span>
+            <span><Check size={13} />Mandate active</span>
+            <span><Check size={13} />Agent authorized</span>
+            <span><Check size={13} />Amount within limit</span>
+            <span><Check size={13} />Single-use authorization valid</span>
           </div>
         </article>
       )}
 
       <details className="technical-details">
-        <summary><ShieldCheck size={16} />Detalles técnicos simulados</summary>
+        <summary><ShieldCheck size={16} />Simulated technical details</summary>
         <dl>
           <DataRow label="Owner" value={mandate.owner} />
           <DataRow label="Agent" value={mandate.agentAddress} />
           <DataRow label="Policy hash" value={mandate.canonical?.policyHash ?? mandate.policyHash} />
-          <DataRow label="Contrato" value="MandateVault · Polygon Demo" />
+          <DataRow label="Contract" value="MandateVault · Polygon Demo" />
         </dl>
       </details>
     </div>
@@ -717,13 +717,13 @@ function MandateOffers({ offers, mandate }) {
   return (
     <div className="mandate-section-content">
       <div className="offers-context">
-        <span>Última búsqueda</span><strong>{mandate.lastRun}</strong><p>{offers.length} ofertas relevantes encontradas</p>
+        <span>Last search</span><strong>{mandate.lastRun}</strong><p>{offers.length} relevant offers found</p>
       </div>
       <div className="offers-table">
-        <div className="offers-head"><span>Proveedor</span><span>Precio unitario</span><span>Entrega</span><span>Puntaje</span><span>Resultado</span></div>
+        <div className="offers-head"><span>Supplier</span><span>Unit price</span><span>Delivery</span><span>Score</span><span>Result</span></div>
         {offers.map((offer) => (
-          <article key={offer.supplier} className={offer.result === "Elegida" ? "selected" : ""}>
-            <div><strong>{offer.supplier}</strong>{offer.result === "Elegida" && <small>Elegida por el agente</small>}</div>
+          <article key={offer.supplier} className={offer.result === "Chosen" ? "selected" : ""}>
+            <div><strong>{offer.supplier}</strong>{offer.result === "Chosen" && <small>Chosen by the agent</small>}</div>
             <strong>{currency.format(offer.unitPrice)}</strong>
             <span>{offer.delivery}</span>
             <span>{offer.score}/100</span>
@@ -740,7 +740,7 @@ function MandatePurchases({ purchases: relatedPurchases }) {
     <div className="mandate-section-content">
       <div className="history-list mandate-purchases-list">
         <div className="history-head">
-          <span>Compra</span><span>Proveedor</span><span>Cantidad</span><span>Total</span><span>Tarjeta</span>
+          <span>Purchase</span><span>Supplier</span><span>Quantity</span><span>Total</span><span>Card</span>
         </div>
         {relatedPurchases.map((purchase) => (
           <article className="history-row" key={purchase.id}>
@@ -761,7 +761,7 @@ function HistoryPage() {
     <section className="page">
       <div className="history-list">
         <div className="history-head">
-          <span>Compra</span><span>Producto</span><span>Proveedor</span><span>Total</span><span>Estado</span>
+          <span>Purchase</span><span>Product</span><span>Supplier</span><span>Total</span><span>Status</span>
         </div>
         {purchases.map((purchase) => (
           <article className="history-row" key={purchase.id}>
@@ -769,7 +769,7 @@ function HistoryPage() {
             <div><strong>{purchase.product}</strong><span>{purchase.quantity} · {purchase.mandate}</span></div>
             <div><strong>{purchase.supplier}</strong></div>
             <div><strong>{currency.format(purchase.total)}</strong></div>
-            <div><span className="purchase-status"><Check size={13} />Comprada</span></div>
+            <div><span className="purchase-status"><Check size={13} />Purchased</span></div>
           </article>
         ))}
       </div>
@@ -782,65 +782,65 @@ function AccountPage() {
     <section className="page account-page">
       <div className="account-grid">
         <article className="balance-card">
-          <div className="account-card-heading"><Building2 size={18} /><span>CUENTA DE ORIGEN</span></div>
-          <p>Saldo disponible</p>
+          <div className="account-card-heading"><Building2 size={18} /><span>SOURCE ACCOUNT</span></div>
+          <p>Available balance</p>
           <strong>{currency.format(1108000)}</strong>
-          <div className="account-number"><span>Cuenta operativa ARS</span><em>•••• 1842</em></div>
+          <div className="account-number"><span>ARS operating account</span><em>•••• 1842</em></div>
         </article>
 
         <article className="account-panel">
-          <div className="account-card-heading"><CreditCard size={18} /><span>MÉTODO PREFERIDO</span></div>
+          <div className="account-card-heading"><CreditCard size={18} /><span>PREFERRED METHOD</span></div>
           <div className="payment-method-mock">
-            <span>Tarjeta empresa</span>
+            <span>Company card</span>
             <strong>•••• 4242</strong>
-            <small>Se usa para fondear chk! fund cuando el agente decide comprar.</small>
+            <small>Used to fund chk! fund when the agent decides to buy.</small>
           </div>
-          <button className="account-secondary-button">Cambiar método</button>
+          <button className="account-secondary-button">Change method</button>
         </article>
 
         <article className="account-panel fund-panel">
           <div className="account-card-heading"><WalletCards size={18} /><span>CHK! FUND</span></div>
           <div className="fund-stats">
-            <div><span>En proceso</span><strong>{currency.format(0)}</strong></div>
-            <div><span>Ejecutado este mes</span><strong>{currency.format(240400)}</strong></div>
-            <div><span>Reintegros</span><strong>{currency.format(0)}</strong></div>
+            <div><span>In progress</span><strong>{currency.format(0)}</strong></div>
+            <div><span>Executed this month</span><strong>{currency.format(240400)}</strong></div>
+            <div><span>Refunds</span><strong>{currency.format(0)}</strong></div>
           </div>
-          <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar y se consumen al emitir la tarjeta virtual.</p>
+          <p>Funds are withdrawn from your account when the agent decides to buy, and consumed when the virtual card is issued.</p>
         </article>
 
         <article className="account-panel card-policy-panel">
-          <div className="account-card-heading"><ShieldCheck size={18} /><span>TARJETAS VIRTUALES</span></div>
+          <div className="account-card-heading"><ShieldCheck size={18} /><span>VIRTUAL CARDS</span></div>
           <dl className="detail-data-list">
-            <DataRow label="Modalidad" value="Un solo uso" />
-            <DataRow label="Límite" value="Importe exacto de la orden" />
-            <DataRow label="Vigencia" value="Hasta completar el checkout" />
+            <DataRow label="Mode" value="Single use" />
+            <DataRow label="Limit" value="Exact order amount" />
+            <DataRow label="Valid" value="Until checkout completes" />
             <DataRow label="Payment delegate" value="VirtualCardAdapter" />
           </dl>
         </article>
       </div>
 
       <article className="money-flow-panel">
-        <div className="account-card-heading"><ArrowRight size={18} /><span>FLUJO DE UNA COMPRA</span></div>
+        <div className="account-card-heading"><ArrowRight size={18} /><span>ANATOMY OF A PURCHASE</span></div>
         <div className="money-flow">
-          <div><i>1</i><span><strong>El agente decide</strong><small>La oferta cumple el mandato</small></span></div>
+          <div><i>1</i><span><strong>The agent decides</strong><small>The offer satisfies the mandate</small></span></div>
           <ArrowRight size={17} />
-          <div><i>2</i><span><strong>Cuenta → chk! fund</strong><small>El saldo se retira</small></span></div>
+          <div><i>2</i><span><strong>Account → chk! fund</strong><small>The funds are withdrawn</small></span></div>
           <ArrowRight size={17} />
-          <div><i>3</i><span><strong>Polygon</strong><small>Registra la autorización</small></span></div>
+          <div><i>3</i><span><strong>Polygon</strong><small>Records the authorization</small></span></div>
           <ArrowRight size={17} />
-          <div><i>4</i><span><strong>Tarjeta virtual</strong><small>Paga al productor</small></span></div>
+          <div><i>4</i><span><strong>Virtual card</strong><small>Pays the supplier</small></span></div>
         </div>
       </article>
 
       <article className="account-movements">
-        <div className="account-card-heading"><History size={18} /><span>ÚLTIMOS MOVIMIENTOS</span></div>
+        <div className="account-card-heading"><History size={18} /><span>RECENT MOVEMENTS</span></div>
         <div className="movement-row">
-          <div><strong>Compra OC-2841</strong><span>Film stretch · Distribuidora Centro</span></div>
-          <div><strong>-{currency.format(142000)}</strong><span>29 ago · 10:22</span></div>
+          <div><strong>Purchase OC-2841</strong><span>Stretch film · Distribuidora Centro</span></div>
+          <div><strong>-{currency.format(142000)}</strong><span>Aug 29 · 10:22</span></div>
         </div>
         <div className="movement-row">
-          <div><strong>Compra OC-2827</strong><span>Guantes de nitrilo · Proveeduría Norte</span></div>
-          <div><strong>-{currency.format(98400)}</strong><span>22 ago · 09:09</span></div>
+          <div><strong>Purchase OC-2827</strong><span>Nitrile gloves · Proveeduría Norte</span></div>
+          <div><strong>-{currency.format(98400)}</strong><span>Aug 22 · 09:09</span></div>
         </div>
       </article>
     </section>
@@ -862,7 +862,7 @@ function WhatsappPage() {
         const data = await response.json();
         if (active) setConnection(data);
       } catch {
-        if (active) setConnection({ status: "error", error: "No se pudo contactar al servidor" });
+        if (active) setConnection({ status: "error", error: "Could not reach the server" });
       }
     }
 
@@ -880,8 +880,8 @@ function WhatsappPage() {
     try {
       const response = await fetch(url, options);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "La operación no pudo completarse");
-      if (name === "test") setNotice("Mensaje de prueba enviado a tu propio chat.");
+      if (!response.ok) throw new Error(data.error || "The operation could not be completed");
+      if (name === "test") setNotice("Test message sent to your own chat.");
       else setConnection(data);
     } catch (error) {
       setNotice(error.message);
@@ -895,9 +895,9 @@ function WhatsappPage() {
 
   return (
     <section className="page whatsapp-page">
-      <nav className="notice-subnav" aria-label="Avisos y notificaciones">
-        <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}>Bandeja <span>4</span></button>
-        <button className={view === "preferences" ? "active" : ""} onClick={() => setView("preferences")}>Preferencias</button>
+      <nav className="notice-subnav" aria-label="Alerts and notifications">
+        <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}>Inbox <span>4</span></button>
+        <button className={view === "preferences" ? "active" : ""} onClick={() => setView("preferences")}>Preferences</button>
         <button className={view === "whatsapp" ? "active" : ""} onClick={() => setView("whatsapp")}>WhatsApp</button>
       </nav>
 
@@ -906,76 +906,76 @@ function WhatsappPage() {
       {view === "whatsapp" && <div className="whatsapp-card">
         <div className="whatsapp-copy">
           <div className="whatsapp-icon"><Smartphone size={23} /></div>
-          <span className="setup-label">INTEGRACIÓN</span>
-          <h1>Avisos y notificaciones</h1>
-          <p>Configurá WhatsApp para recibir en tu propio chat las novedades de chk! Buyer, tu agente de compras.</p>
+          <span className="setup-label">INTEGRATION</span>
+          <h1>Alerts and notifications</h1>
+          <p>Set up WhatsApp to get updates from chk! Buyer, your purchasing agent, in your own chat.</p>
           <ol>
-            <li>Abrí WhatsApp en tu teléfono.</li>
-            <li>Entrá en <strong>Dispositivos vinculados</strong>.</li>
-            <li>Elegí <strong>Vincular un dispositivo</strong> y escaneá el QR.</li>
+            <li>Open WhatsApp on your phone.</li>
+            <li>Go to <strong>Linked devices</strong>.</li>
+            <li>Choose <strong>Link a device</strong> and scan the QR code.</li>
           </ol>
-          <div className="baileys-note">Esta prueba utiliza Baileys y guarda la sesión solamente en este servidor.</div>
+          <div className="baileys-note">This demo uses Baileys and stores the session on this server only.</div>
         </div>
 
         <div className="whatsapp-state">
           {(status === "loading" || status === "connecting" || status === "reconnecting") && (
             <div className="connection-panel">
               <RefreshCw className="spin" size={27} />
-              <strong>{status === "reconnecting" ? "Reconectando WhatsApp" : "Preparando conexión"}</strong>
-              <p>Esto puede demorar unos segundos.</p>
+              <strong>{status === "reconnecting" ? "Reconnecting WhatsApp" : "Preparing connection"}</strong>
+              <p>This may take a few seconds.</p>
             </div>
           )}
 
           {status === "disconnected" && (
             <div className="connection-panel">
               <div className="state-icon"><QrCode size={27} /></div>
-              <strong>Listo para vincular</strong>
-              <p>Generá un código QR para comenzar.</p>
+              <strong>Ready to link</strong>
+              <p>Generate a QR code to get started.</p>
               <button
                 className="whatsapp-primary"
                 disabled={action === "connect"}
                 onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}
               >
-                {action === "connect" ? "Generando..." : "Generar código QR"}
+                {action === "connect" ? "Generating..." : "Generate QR code"}
               </button>
             </div>
           )}
 
           {status === "qr" && connection.qr && (
             <div className="qr-panel">
-              <span>Escaneá este código</span>
-              <div className="qr-frame"><img src={connection.qr} alt="Código QR para vincular WhatsApp" /></div>
-              <p>El código se renueva automáticamente si vence.</p>
+              <span>Scan this code</span>
+              <div className="qr-frame"><img src={connection.qr} alt="QR code to link WhatsApp" /></div>
+              <p>The code refreshes automatically if it expires.</p>
             </div>
           )}
 
           {status === "connected" && (
             <div className="connection-panel connected">
               <div className="connected-icon"><CheckCircle2 size={30} /></div>
-              <strong>WhatsApp conectado</strong>
-              <p>{connection.user?.name || "Cuenta vinculada"}{phone && ` · +${phone}`}</p>
+              <strong>WhatsApp connected</strong>
+              <p>{connection.user?.name || "Linked account"}{phone && ` · +${phone}`}</p>
               <button
                 className="whatsapp-primary"
                 disabled={action === "test"}
                 onClick={() => runAction("test", "/api/whatsapp/test", { method: "POST" })}
               >
-                <Send size={15} /> {action === "test" ? "Enviando..." : "Enviar mensaje de prueba"}
+                <Send size={15} /> {action === "test" ? "Sending..." : "Send test message"}
               </button>
               <button
                 className="disconnect-button"
                 disabled={action === "disconnect"}
                 onClick={() => runAction("disconnect", "/api/whatsapp/session", { method: "DELETE" })}
               >
-                <Unplug size={14} /> Desvincular cuenta
+                <Unplug size={14} /> Unlink account
               </button>
             </div>
           )}
 
           {status === "error" && (
             <div className="connection-panel error">
-              <strong>No pudimos iniciar WhatsApp</strong>
+              <strong>We could not start WhatsApp</strong>
               <p>{connection.error}</p>
-              <button className="whatsapp-primary" onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}>Reintentar</button>
+              <button className="whatsapp-primary" onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}>Retry</button>
             </div>
           )}
 
@@ -988,10 +988,10 @@ function WhatsappPage() {
 
 function NotificationsInbox() {
   const notices = [
-    { icon: Store, type: "Proveedor cambiado", title: "Distribuidora Centro reemplazó a PackAR", detail: "Film stretch · 12% más económico y entrega en 48 horas.", meta: "MD-001 · Hoy, 10:22", channel: "WhatsApp enviado" },
-    { icon: CheckCircle2, type: "Compra realizada", title: "Compra OC-2841 confirmada", detail: "20 rollos de film stretch por $142.000.", meta: "MD-001 · Hoy, 10:24", channel: "WhatsApp enviado" },
-    { icon: ShieldCheck, type: "Mandato activado", title: "Mandato v3 registrado en Polygon", detail: "La política está activa y disponible para verificación del vendedor.", meta: "MD-001 · 15 ago, 14:32", channel: "Solo en la app" },
-    { icon: Clock3, type: "Sin ofertas válidas", title: "No se pudo completar la búsqueda", detail: "Las ofertas de aceite hidráulico superaron el precio máximo.", meta: "MD-003 · Ayer, 16:42", channel: "WhatsApp enviado" },
+    { icon: Store, type: "Supplier switched", title: "Distribuidora Centro replaced PackAR", detail: "Stretch film · 12% cheaper and delivered within 48 hours.", meta: "MD-001 · Today, 10:22", channel: "WhatsApp sent" },
+    { icon: CheckCircle2, type: "Purchase made", title: "Purchase OC-2841 confirmed", detail: "20 rolls of stretch film for $142,000.", meta: "MD-001 · Today, 10:24", channel: "WhatsApp sent" },
+    { icon: ShieldCheck, type: "Mandate activated", title: "Mandate v3 recorded on Polygon", detail: "The policy is active and available for merchant verification.", meta: "MD-001 · Aug 15, 14:32", channel: "In-app only" },
+    { icon: Clock3, type: "No valid offers", title: "The search could not be completed", detail: "The hydraulic oil offers exceeded the maximum price.", meta: "MD-003 · Yesterday, 16:42", channel: "WhatsApp sent" },
   ];
 
   return (
@@ -1009,11 +1009,11 @@ function NotificationsInbox() {
         })}
       </div>
       <aside className="notifications-summary">
-        <span>HOY</span>
+        <span>TODAY</span>
         <strong>2</strong>
-        <p>avisos enviados por WhatsApp</p>
-        <div><span>Proveedor cambiado</span><em>1</em></div>
-        <div><span>Compra realizada</span><em>1</em></div>
+        <p>alerts sent over WhatsApp</p>
+        <div><span>Supplier switched</span><em>1</em></div>
+        <div><span>Purchase made</span><em>1</em></div>
       </aside>
     </div>
   );
@@ -1021,20 +1021,20 @@ function NotificationsInbox() {
 
 function NotificationPreferences() {
   const preferences = [
-    ["Compra realizada", "Confirmación y detalle de cada orden", true],
-    ["Proveedor cambiado", "Proveedor anterior, nuevo y motivo", true],
-    ["Compra fallida", "Errores de checkout o rechazo", true],
-    ["Saldo insuficiente", "El agente no pudo retirar los fondos", true],
-    ["Fallo blockchain", "La autorización no pudo registrarse", true],
-    ["Tarjeta virtual fallida", "No se pudo emitir o utilizar la tarjeta", true],
-    ["Sin ofertas válidas", "Ninguna opción cumplió el mandato", true],
-    ["Mandato por vencer", "Aviso 7 días antes del vencimiento", true],
-    ["Búsqueda completada", "Resumen de cada ejecución programada", false],
+    ["Purchase made", "Confirmation and details of every order", true],
+    ["Supplier switched", "Previous supplier, new one, and why", true],
+    ["Purchase failed", "Checkout errors or rejection", true],
+    ["Insufficient balance", "The agent could not withdraw the funds", true],
+    ["Blockchain failure", "The authorization could not be recorded", true],
+    ["Virtual card failed", "The card could not be issued or used", true],
+    ["No valid offers", "No option satisfied the mandate", true],
+    ["Mandate expiring", "Notice 7 days before expiry", true],
+    ["Search completed", "Summary of every scheduled run", false],
   ];
 
   return (
     <div className="preferences-panel">
-      <div className="preferences-heading"><div><span>NOTIFICACIONES</span><h2>Qué querés recibir</h2></div><p>Los eventos críticos siempre quedan registrados en la bandeja.</p></div>
+      <div className="preferences-heading"><div><span>NOTIFICATIONS</span><h2>What you want to receive</h2></div><p>Critical events are always recorded in the inbox.</p></div>
       <div className="preference-list">
         {preferences.map(([title, description, enabled]) => (
           <label key={title}>

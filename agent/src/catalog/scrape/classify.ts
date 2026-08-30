@@ -52,20 +52,22 @@ const SCHEMA: Record<string, unknown> = {
   },
 };
 
-const SYSTEM = `Clasificás resultados del buscador de un supermercado argentino para un agente que compra insumos de un comercio gastronómico.
+const SYSTEM = `You classify search results from an Argentine supermarket for an agent that buys supplies for a food business.
 
-Te doy un término buscado y una lista numerada de nombres de productos. Para cada uno decidís:
+The product names are in Spanish. Read them as they are — do not translate them.
 
-- relevant: true si el producto ES el insumo buscado. false si es un accesorio, un electrodoméstico, un repuesto o un producto de otra categoría que apareció por coincidencia de texto. Buscando "cafe": el café molido es relevante; una cafetera, un filtro, una taza o unas cápsulas de otra máquina NO lo son.
-- attrs: los atributos que distinguen variantes del mismo producto, en minúsculas y sin tildes. Usá la clave "tipo" para la variante principal.
-    "Café Molido Descafeinado" → [{"key":"tipo","value":"descafeinado"}]
-    "Leche Entera"             → [{"key":"tipo","value":"entera"}]
-    "Arroz Largo Fino"         → [{"key":"tipo","value":"largo fino"}]
-  Si no hay variante clara, devolvé attrs vacío. No inventes atributos.
+I give you a search term and a numbered list of product names. For each one you decide:
 
-Devolvé un item por cada índice que recibiste, con el mismo índice.
+- relevant: true if the product IS the supply being searched for. false if it is an accessory, an appliance, a spare part, or a product from another category that showed up on a text match. Searching "cafe": ground coffee is relevant; a coffee maker, a filter, a mug or capsules for some other machine are NOT.
+- attrs: the attributes that distinguish variants of the same product. They MUST be written in Spanish, lowercase and without accents — they are compared against the attributes extracted from the request, which are also in Spanish. Use the key "tipo" for the main variant.
+    "Café Molido Descafeinado" -> [{"key":"tipo","value":"descafeinado"}]
+    "Leche Entera"             -> [{"key":"tipo","value":"entera"}]
+    "Arroz Largo Fino"         -> [{"key":"tipo","value":"largo fino"}]
+  If there is no clear variant, return empty attrs. Do not invent attributes.
 
-No opines sobre el precio, el tamaño ni el stock: no te los doy y no forman parte de tu respuesta.`;
+Return one item for every index you received, with the same index.
+
+Do not comment on price, size or stock: I do not give them to you and they are not part of your answer.`;
 
 export interface ClassifiedItem {
   relevant: boolean;

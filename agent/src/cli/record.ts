@@ -14,28 +14,34 @@ import { runAgent } from "@/agent/run.js";
 import { createLlmClient } from "@/llm/index.js";
 import { FIXTURES_DIR } from "@/llm/fixtures.js";
 
-/** Los prompts del guion de la demo, más variantes que probablemente tire un juez. */
+/**
+ * Los prompts del guion de la demo, más variantes que probablemente tire un juez.
+ *
+ * Van en inglés porque la interfaz es en inglés y la clave del fixture es el
+ * hash del mensaje del usuario: un fixture grabado en castellano no lo
+ * encuentra nunca un prompt en inglés.
+ */
 const PROMPTS = [
   // committed — órdenes de compra concretas
-  "Reponé 12 litros de leche descremada y 2 kilos de café molido, hasta $200.000",
-  "Necesito 20 litros de leche descremada, si no hay conseguime lo que haya. Presupuesto $60.000",
-  "Comprá 5 litros de detergente, hasta $20.000",
-  "Comprá una cafetera nueva, hasta $200.000",
+  "Restock 12 liters of skim milk and 2 kilos of ground coffee, up to $200,000",
+  "I need 20 liters of skim milk, if there's none get me whatever's there. Budget $60,000",
+  "Buy 5 liters of dish soap, up to $20,000",
+  "Buy a new espresso machine, up to $200,000",
 
   // clarification — le falta información y tiene que preguntar
-  "Comprame leche",
-  "Reponé insumos de limpieza para la semana, hasta $50.000",
+  "Buy me milk",
+  "Restock cleaning supplies for the week, up to $50,000",
 
   // exploratory — consultas: tiene que sugerir, no comprar
-  "¿Cuánto me saldría reponer 12 litros de leche descremada y 2 kilos de café molido?",
-  "Estoy viendo opciones de detergente para la semana, ¿qué conviene?",
+  "How much would it cost me to restock 12 liters of skim milk and 2 kilos of ground coffee?",
+  "I'm looking at dish soap options for the week, which one is the better deal?",
 
   // conditional — depende de algo que todavía no pasó
-  "Si el litro de leche descremada baja de $1.300, comprá 20 litros",
+  "If skim milk drops below $1,300 a liter, buy 20 liters",
 
   // El caso que prueba que el tono NO infla el compromiso: suena urgentísimo y
   // seguro, pero sigue siendo una consulta. Tiene que dar exploratory.
-  "Che necesito URGENTE que me digas YA cuánto sale una cafetera nueva, es una emergencia",
+  "Hey I URGENTLY need you to tell me RIGHT NOW how much a new espresso machine costs, it's an emergency",
 ];
 
 async function main(): Promise<void> {
@@ -48,7 +54,7 @@ async function main(): Promise<void> {
         mandateId: "mandate_cafe_del_sur",
         budgetTotalArs: 500_000,
         maxPerPurchaseArs: 200_000,
-        allowedCategories: ["alimentos", "limpieza", "descartables"],
+        allowedCategories: ["food", "cleaning", "disposables"],
         expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
       },
       clock,

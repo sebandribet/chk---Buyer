@@ -39,7 +39,7 @@ function checkout(overrides: Partial<CheckoutObject> = {}): CheckoutObject {
     {
       sku: "CAFE-1KG",
       title: "Café en grano 1kg",
-      category: "alimentos",
+      category: "food",
       supplierId: "distribuidora-norte",
       quantity: 2,
       unitAmount: 1_850_000,
@@ -61,7 +61,7 @@ function checkout(overrides: Partial<CheckoutObject> = {}): CheckoutObject {
 }
 
 const base: Constraint[] = buildConstraints({
-  allowedCategories: ["alimentos", "limpieza"],
+  allowedCategories: ["food", "cleaning"],
   allowedSuppliers: [{ id: "distribuidora-norte", name: "Distribuidora Norte" }],
   currency: "ARS",
   maxPerOperationArs: 50_000,
@@ -104,7 +104,7 @@ describe("camino feliz", () => {
           {
             sku: "CAFETERA",
             title: "Cafetera industrial",
-            category: "equipamiento",
+            category: "equipment",
             supplierId: "distribuidora-norte",
             quantity: 1,
             unitAmount: 42_000_000,
@@ -167,7 +167,7 @@ describe("proveedores", () => {
           {
             sku: "CAFE-1KG",
             title: "Café en grano 1kg",
-            category: "alimentos",
+            category: "food",
             supplierId: "proveedor-fantasma",
             quantity: 1,
             unitAmount: 1_850_000,
@@ -182,7 +182,7 @@ describe("proveedores", () => {
 
   it("sin el constraint no hay límite de proveedor, pero con lista vacía no pasa nadie", () => {
     const sinLimite = buildConstraints({
-      allowedCategories: ["alimentos"],
+      allowedCategories: ["food"],
       allowedSuppliers: null,
       currency: "ARS",
       maxPerOperationArs: 50_000,
@@ -217,7 +217,7 @@ describe("monto", () => {
           {
             sku: "CAFE-1KG",
             title: "Café en grano 1kg",
-            category: "alimentos",
+            category: "food",
             supplierId: "distribuidora-norte",
             quantity: 1,
             unitAmount: 42_000_000,
@@ -229,7 +229,7 @@ describe("monto", () => {
 
     expect(verdict.passed).toBe(false);
     expect(verdict.evaluations.find((e) => e.type === "checkout.max_amount")?.detail).toContain(
-      "no coincide",
+      "does not match",
     );
   });
 
@@ -245,7 +245,7 @@ describe("policyHash", () => {
 
   it("cambia si cambia cualquier límite", () => {
     const masCaro = buildConstraints({
-      allowedCategories: ["alimentos", "limpieza"],
+      allowedCategories: ["food", "cleaning"],
       allowedSuppliers: [{ id: "distribuidora-norte", name: "Distribuidora Norte" }],
       currency: "ARS",
       maxPerOperationArs: 50_001,
@@ -259,7 +259,7 @@ describe("policyHash", () => {
 
   it("cambia si se agrega una categoría", () => {
     const conEquipamiento = buildConstraints({
-      allowedCategories: ["alimentos", "limpieza", "equipamiento"],
+      allowedCategories: ["food", "cleaning", "equipment"],
       allowedSuppliers: [{ id: "distribuidora-norte", name: "Distribuidora Norte" }],
       currency: "ARS",
       maxPerOperationArs: 50_000,

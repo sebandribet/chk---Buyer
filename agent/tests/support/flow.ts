@@ -58,7 +58,7 @@ function producto(overrides: Partial<Product> = {}): Product {
     title: "Café en grano 1kg",
     brand: "Tostado Sur",
     attrs: {},
-    category: "alimentos",
+    category: "food",
     presentation: { unit: "kg", sizePerPack: 1, packQty: 1 },
     priceArs: 18_500,
     stock: 40,
@@ -102,7 +102,7 @@ export function carrito(lines: CartLine[] = [linea(producto(), 2)]): CartDraft {
 export function carritoConEquipamiento(): CartDraft {
   return carrito([
     linea(producto(), 1),
-    linea(producto({ sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipamiento", priceArs: 42_000 }), 1),
+    linea(producto({ sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipment", priceArs: 42_000 }), 1),
   ]);
 }
 
@@ -138,7 +138,7 @@ export function carritoConProveedorAjeno(): CartDraft {
 export function borrador(overrides: Partial<MandateDraft> = {}): MandateDraft {
   return {
     naturalLanguageDescription: "comprá 2kg de café para la semana",
-    allowedCategories: ["alimentos", "limpieza"],
+    allowedCategories: ["food", "cleaning"],
     suggestedBudgetArs: 500_000,
     suggestedMaxPerPurchaseArs: 60_000,
     allowedSuppliers: ["distribuidora-norte"],

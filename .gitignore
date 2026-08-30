@@ -13,3 +13,6 @@ cache/
 
 # Local artifacts
 *.docx
+
+# macOS
+.DS_Store

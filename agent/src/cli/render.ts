@@ -76,6 +76,22 @@ function line(event: AuditEvent): string {
       return `  ${YELLOW}⚠ prompt injection${RESET} en ${event.sku} ${DIM}(${event.supplierId}): "${event.snippet}"${RESET}`;
     case "policy_check":
       return `  ${event.passed ? GREEN + "✓" : RED + "✗"}${RESET} ${event.check} ${DIM}${event.detail}${RESET}`;
+    case "mandate_signed": {
+      // Los campos editados son la mitad del valor del evento: sin ellos, "el
+      // usuario aprobó" no se distingue de "el usuario apretó un botón".
+      const editado =
+        event.editedFields.length > 0
+          ? `${YELLOW}editó: ${event.editedFields.join(", ")}${RESET}`
+          : `${DIM}aceptó el borrador sin cambios${RESET}`;
+      return (
+        `${GREEN}${BOLD}✍ mandato firmado por el humano${RESET} ${DIM}${event.mandateId.slice(0, 16)}…${RESET}\n` +
+        `  ${DIM}techo ${ars(event.budgetArs)} · por compra ${ars(event.maxPerPurchaseArs)} · vence ${event.expiresAt}${RESET}\n` +
+        `  ${editado}\n` +
+        `  ${DIM}policy ${event.policyHash.slice(0, 12)}… sobre propuesta ${event.proposedHash.slice(0, 12)}…${RESET}`
+      );
+    }
+    case "mandate_revoked":
+      return `${RED}${BOLD}⛔ mandato revocado${RESET} ${DIM}${event.mandateId.slice(0, 16)}… — lo que siga lo frena el contrato${RESET}`;
     case "checkout_closed":
       return `${CYAN}✎ carrito cerrado y firmado por ${event.merchantId}${RESET} ${DIM}${event.checkoutId} · ${ars(event.amount / 100)} · hash ${event.checkoutHash.slice(0, 12)}…${RESET}`;
     case "authorization_reserved":

@@ -141,10 +141,10 @@ describe("idempotencia", () => {
 
   it("el reintento devuelve el hold aunque la tarjeta ahora falle", async () => {
     const { pagos } = setup();
-    const primera = await pagos.authorize(pedido({ idempotencyKey: "estable" }));
+    const primera = await pagos.authorize(pedido({ idempotencyKey: "stable" }));
 
     pagos.failWith("card_declined");
-    const reintento = await pagos.authorize(pedido({ idempotencyKey: "estable" }));
+    const reintento = await pagos.authorize(pedido({ idempotencyKey: "stable" }));
 
     // Un reintento tiene que ser una lectura del resultado anterior, no una
     // operación nueva que puede salir distinto.

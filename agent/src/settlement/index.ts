@@ -35,7 +35,12 @@
 import type { Clock } from "@/contracts/clock.js";
 import type { AuthorizationPort, ChainReader, SettlementPort } from "@/contracts/mandate.js";
 import type { AuditLog } from "@/contracts/audit.js";
-import type { PaymentInstrumentRef } from "../../../shared/ap2.js";
+import type {
+  CheckoutReceipt,
+  PaymentInstrumentRef,
+  SignedCredential,
+} from "../../../shared/ap2.js";
+import { verifyJwt, type KeyPair } from "@/mandate/sdjwt.js";
 import type { PaymentHold, PaymentPort } from "../../../shared/payments.js";
 import { PaymentError } from "../../../shared/payments.js";
 
@@ -51,6 +56,14 @@ export interface SettlementDeps {
   authorizations: Pick<AuthorizationPort, "cancel">;
   /** La dirección del delegado. El contrato la compara al consumir. */
   paymentDelegate: string;
+  /**
+   * La pública del vendedor, conocida de antemano.
+   *
+   * Sirve para una sola cosa: comprobar que el recibo que autoriza este cobro
+   * lo firmó él. Sin esto, "el vendedor aceptó" sería algo que afirma quien
+   * quiere cobrar.
+   */
+  merchantPublicKey: KeyPair["publicKey"];
   clock: Clock;
   audit: AuditLog;
 }
@@ -62,13 +75,28 @@ export interface HoldRequest {
   merchantId: string;
   /** Hash del carrito. Ata el cobro a una compra concreta y da la idempotencia. */
   intentHash: string;
+  /**
+   * El recibo firmado por el vendedor al aceptar la compra.
+   *
+   * Es obligatorio, y ese es el punto: **sin la aceptación del vendedor no hay
+   * cobro posible.** Antes el orden —verificar y después pagar— vivía en el `if`
+   * de quien llamaba, o sea en la disciplina de nadie. Ahora es un argumento
+   * que hay que traer, y traerlo exige que el vendedor haya verificado la
+   * presentación entera: el recibo sale de `verifyPresentation` y de ningún
+   * otro lado.
+   */
+  receipt: SignedCredential<CheckoutReceipt>;
 }
 
 export type HoldResult =
   | { status: "held"; hold: PaymentHold }
   | {
       status: "refused";
-      reason: "authorization_invalid" | "mandate_not_usable" | "payment_declined";
+      reason:
+        | "authorization_invalid"
+        | "mandate_not_usable"
+        | "payment_declined"
+        | "merchant_did_not_accept";
       code?: string;
       detail: string;
     };
@@ -91,6 +119,26 @@ export class Settlement {
    * va a ocurrir, y el humano no tendría forma de saber por qué le falta saldo.
    */
   async hold(request: HoldRequest): Promise<HoldResult> {
+    // Primero de todo: ¿el vendedor aceptó esta compra? El recibo es la única
+    // prueba de que corrió su verificación y le dio que sí. Se comprueba antes
+    // que nada porque cobrar algo que el vendedor no aceptó no es un error de
+    // monto ni de mandato: es cobrar sin venta.
+    const accepted = verifyJwt<CheckoutReceipt>(request.receipt.jwt, this.deps.merchantPublicKey);
+    if (accepted === null) {
+      return {
+        status: "refused",
+        reason: "merchant_did_not_accept",
+        detail: "The receipt is not signed by the merchant. Without their acceptance nothing is charged.",
+      };
+    }
+    if (accepted.authorizationId !== request.authorizationId) {
+      return {
+        status: "refused",
+        reason: "merchant_did_not_accept",
+        detail: `The merchant accepted authorization ${accepted.authorizationId} and the charge attempted is ${request.authorizationId}.`,
+      };
+    }
+
     const authorization = await this.deps.chain.readAuthorization(request.authorizationId);
 
     if (authorization === null || !authorization.active) {
@@ -106,7 +154,7 @@ export class Settlement {
       return {
         status: "refused",
         reason: "authorization_invalid",
-        detail: `La reserva venció el ${new Date(authorization.expiresAt * 1000).toISOString()}.`,
+        detail: `The hold expired on ${new Date(authorization.expiresAt * 1000).toISOString()}.`,
       };
     }
 
@@ -117,7 +165,7 @@ export class Settlement {
       return {
         status: "refused",
         reason: "mandate_not_usable",
-        detail: `El mandato ${authorization.mandateId} está revocado. No se le pide autorización al banco por una compra que ya no está permitida.`,
+        detail: `Mandate ${authorization.mandateId} is revoked. The bank is not asked to authorize a purchase that is no longer permitted.`,
       };
     }
 
@@ -175,7 +223,7 @@ export class Settlement {
   async capture(authorizationId: string, holdRef: string): Promise<CaptureResult> {
     const authorization = await this.deps.chain.readAuthorization(authorizationId);
     if (authorization === null || !authorization.active) {
-      return { status: "refused", reason: "hold_invalid", detail: "La reserva ya no está activa." };
+      return { status: "refused", reason: "hold_invalid", detail: "The hold is no longer active." };
     }
 
     const mandate = await this.deps.chain.readMandate(authorization.mandateId);
@@ -186,7 +234,7 @@ export class Settlement {
       return {
         status: "refused",
         reason: "mandate_not_usable",
-        detail: `El mandato fue revocado el ${mandate.revokedAt}. Se liberó la retención sin cobrar: no se movió un peso.`,
+        detail: `The mandate was revoked on ${mandate.revokedAt}. The hold was released without charging: not a single peso moved.`,
       };
     }
 

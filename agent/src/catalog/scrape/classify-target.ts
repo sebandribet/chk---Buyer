@@ -3,7 +3,7 @@
  *
  * Para salir a buscarlo hace falta una categoría, y la categoría NO es un dato
  * cosmético: es exactamente lo que el mandato filtra. Si el agente busca whisky
- * y lo clasifica como `alimentos`, se saltea una restricción del mandato sin que
+ * y lo clasifica como `food`, se saltea una restricción del mandato sin que
  * nadie lo note.
  *
  * Por eso son dos pasos con roles distintos:
@@ -31,7 +31,7 @@ import type { ScrapeTarget } from "./index.js";
  */
 const FORCED: { category: Category; words: string[] }[] = [
   {
-    category: "bebidas_alcoholicas",
+    category: "alcoholic_beverages",
     words: [
       "vino", "cerveza", "whisky", "whiskey", "vodka", "gin", "ginebra", "ron",
       "tequila", "fernet", "aperitivo", "champagne", "champan", "espumante",
@@ -40,7 +40,7 @@ const FORCED: { category: Category; words: string[] }[] = [
     ],
   },
   {
-    category: "equipamiento",
+    category: "equipment",
     words: [
       "cafetera", "heladera", "freidora", "horno", "microondas", "licuadora",
       "batidora", "procesadora", "amasadora", "anafe", "cocina industrial",
@@ -60,9 +60,9 @@ export function forcedCategory(term: string): Category | null {
 }
 
 const Proposal = z.object({
-  category: z.enum(["alimentos", "limpieza", "descartables", "bebidas_alcoholicas", "equipamiento"]),
+  category: z.enum(["food", "cleaning", "disposables", "alcoholic_beverages", "equipment"]),
   query: z.string(),
-  expect_units: z.array(z.enum(["L", "kg", "unidad"])),
+  expect_units: z.array(z.enum(["L", "kg", "unit"])),
   exclude: z.array(z.string()),
 });
 
@@ -73,29 +73,36 @@ const SCHEMA: Record<string, unknown> = {
   properties: {
     category: {
       type: "string",
-      enum: ["alimentos", "limpieza", "descartables", "bebidas_alcoholicas", "equipamiento"],
+      enum: ["food", "cleaning", "disposables", "alcoholic_beverages", "equipment"],
     },
     query: { type: "string" },
-    expect_units: { type: "array", items: { type: "string", enum: ["L", "kg", "unidad"] } },
+    expect_units: { type: "array", items: { type: "string", enum: ["L", "kg", "unit"] } },
     exclude: { type: "array", items: { type: "string" } },
   },
 };
 
-const SYSTEM = `Preparás una búsqueda en el catálogo de un supermercado argentino, para un agente que compra insumos de una cafetería.
+/**
+ * El prompt está en inglés pero `query` y `exclude` tienen que salir en
+ * castellano rioplatense: son términos que se tipean en el buscador de un
+ * supermercado argentino. Un "paper towels" no devuelve nada en Jumbo.
+ */
+const SYSTEM = `You are preparing a catalog search against an Argentine supermarket, for an agent that buys supplies for a coffee shop.
 
-Te doy el nombre genérico de un producto. Devolvé cómo buscarlo:
+You get the generic name of a product. Return how to search for it:
 
-- category: alimentos | limpieza | descartables | bebidas_alcoholicas | equipamiento.
-  bebidas_alcoholicas es cualquier bebida con alcohol. equipamiento es maquinaria y electrodomésticos, no insumos.
-- query: cómo lo buscarías en el buscador del supermercado. Corto y concreto.
-- expect_units: en qué unidades se vende, en orden de preferencia. "L" para líquidos, "kg" para sólidos por peso, "unidad" para lo que se cuenta.
-- exclude: palabras que descartan un resultado irrelevante. Buscando "detergente" hay que excluir "ropa"; buscando "leche", "en polvo". Devolvé lista vacía si no se te ocurre ninguna.`;
+- category: food | cleaning | disposables | alcoholic_beverages | equipment.
+  alcoholic_beverages is any drink containing alcohol. equipment is machinery and appliances, not consumable supplies.
+- query: what you would type into the supermarket's search box. Short and concrete.
+- expect_units: the units it is sold in, in order of preference. "L" for liquids, "kg" for solids sold by weight, "unit" for things that are counted.
+- exclude: words that rule out an irrelevant result. Searching "detergente" you must exclude "ropa"; searching "leche", "en polvo". Return an empty list if none come to mind.
+
+CRITICAL: \`query\` and \`exclude\` must be written in Argentine Spanish, lowercase and without accents. They are typed verbatim into an Argentine supermarket's search box — an English term returns nothing. The product name you receive may be in English; translate it to the Spanish word an Argentine shopper would use ("paper towels" -> "rollo de cocina", "bleach" -> "lavandina").`;
 
 /**
  * Arma el plan de búsqueda para un rubro desconocido.
  *
  * Si el modelo falla, se usa un plan mínimo: la categoría más restringida que
- * las palabras permitan, o `alimentos` si ninguna aplica. Nunca se cancela la
+ * las palabras permitan, o `food` si ninguna aplica. Nunca se cancela la
  * búsqueda por no poder clasificar — se busca con lo que hay y el mandato sigue
  * filtrando después.
  */
@@ -118,7 +125,7 @@ export async function planFor(canonical: string, llm: LlmClient): Promise<Scrape
 
   // La palabra clave gana siempre. El modelo solo elige cuando no hay ninguna
   // categoría restringida en juego.
-  const category: Category = forzada ?? propuesta?.category ?? "alimentos";
+  const category: Category = forzada ?? propuesta?.category ?? "food";
 
   return {
     canonical,

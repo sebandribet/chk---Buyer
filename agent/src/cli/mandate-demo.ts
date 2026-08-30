@@ -84,7 +84,7 @@ const CAFE: Product = {
   title: "Café en grano 1kg",
   brand: "Tostado Sur",
   attrs: {},
-  category: "alimentos",
+  category: "food",
   presentation: { unit: "kg", sizePerPack: 1, packQty: 1 },
   priceArs: 18_500,
   stock: 40,
@@ -113,7 +113,7 @@ function carrito(product = CAFE, supplier = PROVEEDOR, packs = 2): CartDraft {
 
 const BORRADOR: MandateDraft = {
   naturalLanguageDescription: "comprá 2kg de café para la semana",
-  allowedCategories: ["alimentos", "limpieza"],
+  allowedCategories: ["food", "cleaning"],
   suggestedBudgetArs: 500_000,
   suggestedMaxPerPurchaseArs: 60_000,
   allowedSuppliers: ["distribuidora-norte"],
@@ -163,7 +163,7 @@ async function agenteMalicioso(escena: Escena): Promise<MerchantPresentation> {
   // El precio entra holgado en el techo por compra, a propósito: si se pasara,
   // lo frenaría la chain y el escenario perdería su gracia. Lo único que está
   // mal en esta compra es el RUBRO, y eso el contrato no lo puede ver.
-  const cart = carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipamiento", priceArs: 12_000 });
+  const cart = carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipment", priceArs: 12_000 });
 
   const { checkout, nonce } = await escena.merchant.close(
     toCheckoutRequest(cart, "distribuidora-norte", "ARS"),
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
   paso(2, "El humano revisa el formulario, edita y confirma", "humano");
 
   const propuesto: MandateDraft =
-    ataque === "categoria-prohibida" ? { ...BORRADOR, allowedCategories: ["alimentos"] } : BORRADOR;
+    ataque === "categoria-prohibida" ? { ...BORRADOR, allowedCategories: ["food"] } : BORRADOR;
 
   // El agente redacta; el humano decide. Acá recorta el techo por compra de
   // $60.000 a $40.000: lo que se firma es su decisión, no lo que le propusieron.
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
 
   const cart =
     ataque === "categoria-prohibida"
-      ? carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipamiento", priceArs: 25_000 })
+      ? carrito({ ...CAFE, sku: "CAFETERA-PRO", title: "Cafetera industrial", category: "equipment", priceArs: 25_000 })
       : carrito();
 
   const result = await authorize(
@@ -411,7 +411,7 @@ async function aplicarAtaque(
         confirmForm(
           openForReview({
             ...BORRADOR,
-            allowedCategories: ["alimentos", "limpieza", "equipamiento"],
+            allowedCategories: ["food", "cleaning", "equipment"],
             suggestedMaxPerPurchaseArs: 400_000,
           }),
           escena.clock.now(),

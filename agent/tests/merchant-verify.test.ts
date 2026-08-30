@@ -175,7 +175,7 @@ describe("compra fuera del mandato", () => {
     expect(result.status).toBe("refused");
     if (result.status !== "refused") return;
     expect(result.reason).toBe("constraint_violated");
-    expect(result.detail).toContain("equipamiento");
+    expect(result.detail).toContain("equipment");
   });
 
   it("un agente que se saltea su propio policy engine igual lo agarra el vendedor", async () => {
@@ -184,8 +184,8 @@ describe("compra fuera del mandato", () => {
     // comprometido. Todas sus firmas son válidas y la reserva on-chain es real
     // —el contrato no sabe de categorías, sólo de montos—, así que lo único que
     // queda entre esta compra y el cobro es que el vendedor evalúe los límites.
-    const escena = await montar(borrador({ allowedCategories: ["limpieza"] }));
-    const cart = carrito(); // café: categoría "alimentos", fuera del mandato
+    const escena = await montar(borrador({ allowedCategories: ["cleaning"] }));
+    const cart = carrito(); // café: categoría "food", fuera del mandato
 
     const { checkout, nonce } = await escena.merchant.close(
       toCheckoutRequest(cart, "distribuidora-norte", "ARS"),
@@ -221,7 +221,7 @@ describe("compra fuera del mandato", () => {
     expect(veredicto.ok).toBe(false);
     if (veredicto.ok) return;
     expect(veredicto.failure).toBe("constraint_violated");
-    expect(veredicto.detail).toContain("alimentos");
+    expect(veredicto.detail).toContain("food");
   });
 
   it("un proveedor fuera de la allowlist se rechaza", async () => {
@@ -330,7 +330,7 @@ describe("mandatos cruzados", () => {
 
     // Otro mandato del mismo humano, con límites más amplios.
     const amplio = await montar(
-      borrador({ allowedCategories: ["alimentos", "limpieza", "equipamiento"], suggestedMaxPerPurchaseArs: 500_000 }),
+      borrador({ allowedCategories: ["food", "cleaning", "equipment"], suggestedMaxPerPurchaseArs: 500_000 }),
     );
 
     // El agente presenta la compra de hoy bajo el mandato amplio. Los dos son

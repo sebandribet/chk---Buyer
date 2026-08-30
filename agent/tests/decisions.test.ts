@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { authorize } from "@/agent/authorize.js";
 import { confirmForm, editForm, matchesProposal, openForReview } from "@/mandate/form.js";
+import { merchant as merchantKeys } from "@/mandate/keys.js";
 import { FakePaymentPort } from "@/payments/fake.js";
 import { Settlement } from "@/settlement/index.js";
 import { borrador, carrito, IDENTIDAD, montar, TARJETA } from "./support/flow.js";
@@ -77,8 +78,8 @@ describe("#01 · el mandato lo crea el usuario, no el agente", () => {
   });
 
   it("reordenar una lista no cuenta como edición", () => {
-    const propuesto = borrador({ allowedCategories: ["alimentos", "limpieza"] });
-    const form = editForm(openForReview(propuesto), { allowedCategories: ["alimentos", "limpieza"] });
+    const propuesto = borrador({ allowedCategories: ["food", "cleaning"] });
+    const form = editForm(openForReview(propuesto), { allowedCategories: ["food", "cleaning"] });
 
     // Contar cambios que el humano no hizo ensuciaría el registro justo donde
     // tiene que ser preciso.
@@ -189,6 +190,9 @@ describe("#03 · el comprador paga con tarjeta, no con una wallet", () => {
     );
     if (result.status !== "authorized") throw new Error("debía autorizar");
 
+    const veredicto = await escena.merchant.verify(result.presentation);
+    if (!veredicto.ok) throw new Error("el vendedor debía aceptar");
+
     const pagos = new FakePaymentPort(escena.clock);
     const settlement = new Settlement({
       payments: pagos,
@@ -196,6 +200,7 @@ describe("#03 · el comprador paga con tarjeta, no con una wallet", () => {
       settlement: escena.chain,
       authorizations: escena.chain,
       paymentDelegate: IDENTIDAD.paymentDelegate,
+      merchantPublicKey: merchantKeys.publicKey,
       clock: escena.clock,
       audit: escena.ctx.audit,
     });
@@ -207,6 +212,7 @@ describe("#03 · el comprador paga con tarjeta, no con una wallet", () => {
       instrument: TARJETA,
       merchantId: "distribuidora-norte",
       intentHash: result.presentation.closed.payload.checkout_hash,
+      receipt: veredicto.receipt,
     });
     expect(held.status).toBe("held");
     if (held.status !== "held") return;

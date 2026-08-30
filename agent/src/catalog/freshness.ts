@@ -14,28 +14,28 @@
 import type { Category } from "@/contracts/index.js";
 
 /** Perfiles de volatilidad. El nombre dice qué tan seguido se mueve el precio. */
-export type VolatilityTier = "estable" | "diario" | "intradia";
+export type VolatilityTier = "stable" | "daily" | "intraday";
 
 export const TTL_MINUTES: Record<VolatilityTier, number> = {
   /** Precios de góndola de secos y limpieza: se mueven por semana. */
-  estable: 60 * 24 * 3,
+  stable: 60 * 24 * 3,
   /** Frescos y todo lo que tenga promociones semanales. */
-  diario: 60 * 24,
+  daily: 60 * 24,
   /**
    * Precio dinámico: vuelos, hotelería, cualquier cosa con subastas o cupos.
    * Hoy ningún rubro nuestro está acá — el escalón existe porque el mecanismo
    * tiene que soportarlo el día que agreguemos uno, no porque lo usemos.
    */
-  intradia: 45,
+  intraday: 45,
 };
 
 /** Volatilidad por defecto según la categoría, cuando el rubro no la declara. */
 export const DEFAULT_TIER: Record<Category, VolatilityTier> = {
-  alimentos: "diario",
-  limpieza: "estable",
-  descartables: "estable",
-  bebidas_alcoholicas: "estable",
-  equipamiento: "estable",
+  food: "daily",
+  cleaning: "stable",
+  disposables: "stable",
+  alcoholic_beverages: "stable",
+  equipment: "stable",
 };
 
 export function ttlMinutesFor(tier: VolatilityTier): number {

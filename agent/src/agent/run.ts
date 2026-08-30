@@ -49,9 +49,9 @@ export interface RunDeps extends DecideDeps {
 function suggestionDetail(reason: SuggestionReason, intent: PurchaseIntent): string {
   switch (reason) {
     case "no_mandate":
-      return "No hay ningún mandato firmado para esta cuenta. El agente puede buscar y comparar, pero no puede comprar hasta que firmes el mandato de abajo.";
+      return "There is no signed mandate for this account. The agent can search and compare, but it cannot buy until you sign the mandate below.";
     case "mandate_unusable":
-      return "El mandato existe pero no está vigente (revocado, vencido o inactivo). Esto es lo que compraría si lo reactivaras.";
+      return "The mandate exists but is not active (revoked, expired or inactive). This is what it would buy if you reactivated it.";
     case "exploratory_request":
       return `El pedido se leyó como una consulta, no como una orden de compra: "${intent.naturalLanguageDescription}". Si querés que lo compre, pedímelo de forma directa.`;
     case "conditional_request":
@@ -90,7 +90,7 @@ export async function runAgent(
       type: "commitment_assessed",
       level: intent.commitment,
       executes: false,
-      detail: "No hay mandato firmado. El compromiso del pedido no puede sustituirlo.",
+      detail: "No signed mandate. The request's commitment cannot stand in for one.",
     });
     const detail = suggestionDetail("no_mandate", intent);
     return done(null, await suggest(intent, null, "no_mandate", detail, deps, ctx));
@@ -109,7 +109,7 @@ export async function runAgent(
       type: "commitment_assessed",
       level: intent.commitment,
       executes: true,
-      detail: "Orden de compra concreta. El gate de compromiso la deja pasar al motor de decisión.",
+      detail: "Concrete purchase order. The commitment gate lets it through to the decision engine.",
     });
     return done(await decide(intent, mandateId, deps, ctx), null);
   }
@@ -130,7 +130,7 @@ export async function runAgent(
     type: "commitment_assessed",
     level: intent.commitment,
     executes: false,
-    detail: `El pedido es "${intent.commitment}": se busca y se compara, no se compra.`,
+    detail: `The request is "${intent.commitment}": search and compare, do not buy.`,
   });
 
   // Un mandato caído no acota nada: se sugiere como si no existiera.

@@ -130,13 +130,13 @@ export type SuggestionReason =
 export interface AlternativeOption {
   candidate: Candidate;
   /** Dónde cae en el rango de precios de ese rubro. */
-  tier: "economica" | "intermedia" | "premium";
+  tier: "budget" | "midrange" | "premium";
   /**
    * Cómo queda contra el presupuesto que el humano mencionó, si mencionó alguno.
-   * `por_encima` NO la descalifica: al cotizar se muestran igual, marcadas.
+   * `above` NO la descalifica: al cotizar se muestran igual, marcadas.
    * Saber que la buena cuesta el doble es exactamente lo que se está preguntando.
    */
-  vsBudget: "dentro" | "por_encima" | null;
+  vsBudget: "within" | "above" | null;
 }
 
 export interface NeedAlternatives {

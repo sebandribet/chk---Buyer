@@ -15,7 +15,7 @@ import { FakePaymentPort } from "@/payments/fake.js";
 import { buildDisputeEvidence, TEST_MODE_OUTCOME } from "@/settlement/dispute.js";
 import { Settlement } from "@/settlement/index.js";
 import { sha256b64u, verifyJwt } from "@/mandate/sdjwt.js";
-import { usuario } from "@/mandate/keys.js";
+import { merchant as merchantKeys, usuario } from "@/mandate/keys.js";
 import { carrito, IDENTIDAD, montar, TARJETA } from "./support/flow.js";
 import type { OpenCheckoutMandate } from "../../shared/ap2.js";
 
@@ -48,6 +48,7 @@ async function compraCobrada() {
     settlement: escena.chain,
     authorizations: escena.chain,
     paymentDelegate: IDENTIDAD.paymentDelegate,
+    merchantPublicKey: merchantKeys.publicKey,
     clock: escena.clock,
     audit: escena.ctx.audit,
   });
@@ -57,6 +58,7 @@ async function compraCobrada() {
     instrument: TARJETA,
     merchantId: "distribuidora-norte",
     intentHash: result.presentation.closed.payload.checkout_hash,
+    receipt: veredicto.receipt,
   });
   if (held.status !== "held") throw new Error("no retuvo");
 

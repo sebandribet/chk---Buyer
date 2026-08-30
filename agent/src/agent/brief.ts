@@ -23,13 +23,13 @@ import type {
 } from "@/contracts/index.js";
 import type { LlmClient } from "@/llm/index.js";
 
-const ars = (n: number) => `$${n.toLocaleString("es-AR")}`;
+import { ars } from "@/money.js";
 
 function describeNeed(n: NeedSpec): string {
   const attrs = Object.entries(n.attrs);
   const detalle = attrs.length > 0 ? ` (${attrs.map(([k, v]) => `${k}: ${v}`).join(", ")})` : "";
-  const ref = n.isReference === true ? " [cantidad de referencia]" : "";
-  return `${n.qty} ${n.unit} de ${n.canonical}${detalle}${ref}`;
+  const ref = n.isReference === true ? " [reference quantity]" : "";
+  return `${n.qty} ${n.unit} of ${n.canonical}${detalle}${ref}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,49 +48,49 @@ export function buildOrderBrief(intent: Omit<PurchaseIntent, "brief" | "intentId
   const unspecified: string[] = [];
 
   lines.push({
-    label: "Qué",
+    label: "What",
     value: intent.needs.length > 0 ? intent.needs.map(describeNeed).join(" · ") : "—",
   });
 
-  if (c.budgetArs !== null) lines.push({ label: "Techo de gasto", value: ars(c.budgetArs) });
-  else unspecified.push("presupuesto");
+  if (c.budgetArs !== null) lines.push({ label: "Spending cap", value: ars(c.budgetArs) });
+  else unspecified.push("budget");
 
   if (c.maxDeliveryDays !== null) {
-    lines.push({ label: "Para cuándo", value: `entrega en hasta ${c.maxDeliveryDays} día(s)` });
+    lines.push({ label: "By when", value: `delivered within ${c.maxDeliveryDays} day(s)` });
   } else {
-    unspecified.push("plazo de entrega");
+    unspecified.push("delivery window");
   }
 
   const conSustitutos = intent.needs.filter((n) => n.substitutesAllowed).map((n) => n.canonical);
   lines.push({
-    label: "Sustitutos",
+    label: "Substitutes",
     value:
       conSustitutos.length === 0
-        ? "no se aceptan"
+        ? "not accepted"
         : conSustitutos.length === intent.needs.length
-          ? "se aceptan"
-          : `se aceptan solo para ${conSustitutos.join(", ")}`,
+          ? "accepted"
+          : `accepted only for ${conSustitutos.join(", ")}`,
   });
 
   if (c.allowedSuppliers !== null) {
-    lines.push({ label: "Proveedores", value: c.allowedSuppliers.join(", ") });
+    lines.push({ label: "Suppliers", value: c.allowedSuppliers.join(", ") });
   } else {
-    lines.push({ label: "Proveedores", value: "cualquiera de los que habilite el mandato" });
+    lines.push({ label: "Suppliers", value: "any the mandate allows" });
   }
 
   if (c.forbiddenCategories.length > 0) {
-    lines.push({ label: "Prohibido", value: c.forbiddenCategories.join(", ") });
+    lines.push({ label: "Forbidden", value: c.forbiddenCategories.join(", ") });
   }
 
   if (intent.intentExpiry !== null) {
-    lines.push({ label: "Pedido vigente hasta", value: intent.intentExpiry });
+    lines.push({ label: "Request valid until", value: intent.intentExpiry });
   } else {
-    unspecified.push("vigencia del pedido");
+    unspecified.push("request validity");
   }
 
   const text =
     lines.map((l) => `${l.label}: ${l.value}`).join(". ") +
-    (unspecified.length > 0 ? `. Sin especificar: ${unspecified.join(", ")}.` : ".");
+    (unspecified.length > 0 ? `. Unspecified: ${unspecified.join(", ")}.` : ".");
 
   return { text, lines, unspecified };
 }
@@ -99,7 +99,7 @@ export function buildOrderBrief(intent: Omit<PurchaseIntent, "brief" | "intentId
 // Brief de búsqueda (exploratory / conditional)
 // ---------------------------------------------------------------------------
 
-const UNITS = ["L", "kg", "unidad"] as const satisfies readonly Unit[];
+const UNITS = ["L", "kg", "unit"] as const satisfies readonly Unit[];
 
 const RawSearchBrief = z.object({
   rationale: z.string(),
@@ -144,19 +144,19 @@ const SEARCH_BRIEF_SCHEMA: Record<string, unknown> = {
   },
 };
 
-const SEARCH_BRIEF_SYSTEM = `Sos el módulo de búsqueda de un agente de compras de insumos para un comercio gastronómico en Argentina.
+const SEARCH_BRIEF_SYSTEM = `You are the search module of a purchasing agent that buys supplies for a food business in Argentina.
 
-Recibís una consulta del humano que NO es una orden de compra: está preguntando, comparando o explorando. Tu tarea es decidir qué buscar en el catálogo para poder contestarle con precios concretos.
+You receive a query from the human that is NOT a purchase order: they are asking, comparing or browsing. Your task is to decide what to search for in the catalog so the agent can answer with concrete prices.
 
-NO se va a comprar nada con esto. Es una cotización de referencia.
+NOTHING will be bought with this. It is a reference quote.
 
-Reglas:
-1. Devolvé los ítems que hay que buscar, con nombre canónico genérico en minúsculas y singular: "detergente", "leche", "arroz". Las variantes van en attrs.
-2. reference_qty es una cantidad TÍPICA de reposición semanal para un comercio gastronómico chico, elegida solo para poder cotizar. Si el humano dio una cantidad, usá esa. Si no, elegí una razonable y explicala en rationale.
-3. Si la consulta menciona un rubro amplio ("insumos de limpieza", "cosas para el desayuno"), desglosalo en 2 a 4 ítems concretos y frecuentes de ese rubro.
-4. No inventes marcas ni proveedores.
-5. rationale: una o dos oraciones, en español, explicando qué vas a buscar y de dónde salieron las cantidades de referencia.
-6. Si la consulta no permite deducir ningún producto, devolvé items vacío.`;
+Rules:
+1. Return the items to search for, with a generic canonical name, lowercase and singular. It must be written in SPANISH, because it is matched against an Argentine catalog: "detergente", "leche", "arroz". Translate the English word the human used into the Spanish term an Argentine shopper would use (rice -> "arroz", bleach -> "lavandina", napkins -> "servilletas"). Variants go in attrs, also in Spanish.
+2. reference_qty is a TYPICAL weekly restocking quantity for a small food business, chosen only so a quote is possible. If the human gave a quantity, use that one. If not, pick a reasonable one and explain it in rationale.
+3. If the query mentions a broad area ("cleaning supplies", "stuff for breakfast"), break it down into 2 to 4 concrete, common items from that area.
+4. Do not invent brands or suppliers.
+5. rationale: one or two sentences, in English, explaining what you are going to search for and where the reference quantities came from.
+6. If the query does not allow deducing any product, return an empty items list.`;
 
 /**
  * Decide qué buscar para una consulta que no es una orden de compra.
@@ -194,8 +194,8 @@ export async function buildSearchBrief(
   const brief: SearchBrief = {
     text:
       needs.length > 0
-        ? `Buscando ${needs.map(describeNeed).join(" · ")}`
-        : "No se pudo deducir qué buscar.",
+        ? `Searching ${needs.map(describeNeed).join(" · ")}`
+        : "Could not work out what to search for.",
     rationale: parsed.rationale,
   };
 

@@ -44,7 +44,7 @@ const identidad: MandateIdentity = {
 function borrador(overrides: Partial<MandateDraft> = {}): MandateDraft {
   return {
     naturalLanguageDescription: "comprá café y detergente para la semana",
-    allowedCategories: ["alimentos", "limpieza"],
+    allowedCategories: ["food", "cleaning"],
     suggestedBudgetArs: 500_000,
     suggestedMaxPerPurchaseArs: 60_000,
     allowedSuppliers: null,
@@ -221,7 +221,7 @@ describe("el contrato rechaza términos inválidos", () => {
           allowedActions: 1,
           policyHash: "hash-mentido",
         },
-        [{ type: "checkout.allowed_categories", allowed: ["alimentos"] }],
+        [{ type: "checkout.allowed_categories", allowed: ["food"] }],
       ),
     ).rejects.toThrow(/PolicyHashMismatch/);
   });
@@ -272,7 +272,11 @@ describe("la vista que consume el agente", () => {
       budgetTotalArs: 500_000,
       budgetSpentArs: 0,
       maxPerPurchaseArs: 60_000,
-      allowedCategories: ["alimentos", "limpieza"],
+      // Ordenadas: las constraints se ordenan antes de hashear, para que el
+      // mismo permiso dé siempre el mismo hash. Con los nombres en castellano
+      // "alimentos" < "limpieza" coincidía con el orden del borrador y esto
+      // pasaba desapercibido.
+      allowedCategories: ["cleaning", "food"],
       allowedSuppliers: ["distribuidora-norte"],
       source: "fake",
     });

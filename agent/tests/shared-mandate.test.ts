@@ -25,7 +25,7 @@ describe("shared mandate contract", () => {
         budgetTotalArs: 500_000,
         budgetSpentArs: 120_000,
         maxPerPurchaseArs: 150_000,
-        allowedCategories: ["limpieza"],
+        allowedCategories: ["cleaning"],
         allowedSuppliers: ["acme-supplies"],
         readAt: "2026-08-29T12:00:00.000Z",
         blockNumber: 1,
@@ -41,6 +41,6 @@ describe("shared mandate contract", () => {
 
     expect(mandate.status).toBe("Active");
     expect(mandate.spent).toBe(120_000);
-    expect(mandate.policy.allowedCategories).toEqual(["limpieza"]);
+    expect(mandate.policy.allowedCategories).toEqual(["cleaning"]);
   });
 });

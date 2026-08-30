@@ -16,6 +16,8 @@ import { FakePaymentPort } from "@/payments/fake.js";
 import { Settlement } from "@/settlement/index.js";
 import { ARS_POR_USD } from "@/payments/fx.js";
 import { authorize } from "@/agent/authorize.js";
+import { impostor, merchant as merchantKeys } from "@/mandate/keys.js";
+import { signJwt } from "@/mandate/sdjwt.js";
 import { carrito, IDENTIDAD, montar, TARJETA } from "./support/flow.js";
 
 /** Monta la escena completa y deja una compra autorizada, lista para cobrar. */
@@ -35,6 +37,11 @@ async function conCompraAutorizada() {
   );
   if (result.status !== "authorized") throw new Error(`No autorizó: ${result.detail}`);
 
+  // El vendedor verifica y firma el recibo. Sin ese recibo no se puede cobrar:
+  // el tipo de `hold()` lo exige, así que ni los tests pueden saltear el paso.
+  const veredicto = await escena.merchant.verify(result.presentation);
+  if (!veredicto.ok) throw new Error(`El vendedor rechazó: ${veredicto.detail}`);
+
   const pagos = new FakePaymentPort(escena.clock);
   const settlement = new Settlement({
     payments: pagos,
@@ -42,6 +49,7 @@ async function conCompraAutorizada() {
     settlement: escena.chain,
     authorizations: escena.chain,
     paymentDelegate: IDENTIDAD.paymentDelegate,
+    merchantPublicKey: merchantKeys.publicKey,
     clock: escena.clock,
     audit: escena.ctx.audit,
   });
@@ -50,6 +58,7 @@ async function conCompraAutorizada() {
     ...escena,
     pagos,
     settlement,
+    veredicto,
     presentation: result.presentation,
     checkout: result.checkout,
     pedido: {
@@ -57,6 +66,7 @@ async function conCompraAutorizada() {
       instrument: TARJETA,
       merchantId: "distribuidora-norte",
       intentHash: result.presentation.closed.payload.checkout_hash,
+      receipt: veredicto.receipt,
     },
   };
 }
@@ -104,6 +114,46 @@ describe("el circuito completo", () => {
 
     expect(autorizado).toMatchObject({ authorizedCurrency: "ars", chargedCurrency: "usd" });
     expect(cobrado).toBeDefined();
+  });
+});
+
+describe("sin la aceptación del vendedor no se cobra", () => {
+  it("un recibo firmado por otro no autoriza el cobro", async () => {
+    const e = await conCompraAutorizada();
+
+    // El recibo es la única prueba de que el vendedor corrió su verificación y
+    // le dio que sí. Falsificarlo con otra clave no sirve.
+    const falso = signJwt(e.veredicto.receipt.payload, impostor.privateKey);
+    const held = await e.settlement.hold({ ...e.pedido, receipt: falso });
+
+    expect(held.status).toBe("refused");
+    if (held.status !== "refused") return;
+    expect(held.reason).toBe("merchant_did_not_accept");
+  });
+
+  it("un recibo de OTRA compra no sirve para cobrar ésta", async () => {
+    const e = await conCompraAutorizada();
+
+    // El vendedor aceptó una autorización concreta. Reciclar ese recibo para
+    // cobrar otra sería cobrar algo que nadie aceptó.
+    const otra = signJwt(
+      { ...e.veredicto.receipt.payload, authorizationId: "0xotra-compra" },
+      merchantKeys.privateKey,
+    );
+    const held = await e.settlement.hold({ ...e.pedido, receipt: otra });
+
+    expect(held.status).toBe("refused");
+    if (held.status !== "refused") return;
+    expect(held.reason).toBe("merchant_did_not_accept");
+  });
+
+  it("no se le pide autorización al banco si el vendedor no aceptó", async () => {
+    const e = await conCompraAutorizada();
+    await e.settlement.hold({ ...e.pedido, receipt: signJwt(e.veredicto.receipt.payload, impostor.privateKey) });
+
+    // Se corta antes de tocar el proveedor de pagos: cobrar sin venta no es un
+    // problema de monto, es cobrar sin venta.
+    expect(e.ctx.audit.events().some((ev) => ev.type === "payment_authorized")).toBe(false);
   });
 });
 
@@ -203,7 +253,18 @@ describe("reservas inválidas", () => {
   it("no cobra sin reserva on-chain", async () => {
     const e = await conCompraAutorizada();
 
-    const held = await e.settlement.hold({ ...e.pedido, authorizationId: "0xinventado" });
+    // El recibo también apunta a la autorización inventada: si no, lo frenaría
+    // antes el chequeo de aceptación del vendedor y este test no probaría lo
+    // que dice probar.
+    const recibo = signJwt(
+      { ...e.veredicto.receipt.payload, authorizationId: "0xinventado" },
+      merchantKeys.privateKey,
+    );
+    const held = await e.settlement.hold({
+      ...e.pedido,
+      authorizationId: "0xinventado",
+      receipt: recibo,
+    });
 
     expect(held.status).toBe("refused");
     if (held.status !== "refused") return;

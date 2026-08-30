@@ -56,7 +56,7 @@ describe("sin mandato firmado", () => {
     // ($16.800 → $17.000), no de un número inventado con margen.
     expect(run.suggestion?.mandateDraft.suggestedBudgetArs).toBe(17_000);
     // Solo la categoría que el carrito necesita, no todas las del catálogo.
-    expect(run.suggestion?.mandateDraft.allowedCategories).toEqual(["alimentos"]);
+    expect(run.suggestion?.mandateDraft.allowedCategories).toEqual(["food"]);
     // Y el borrador nunca se auto-aprueba.
     expect(run.suggestion?.mandateDraft.userCartConfirmationRequired).toBe(true);
   });

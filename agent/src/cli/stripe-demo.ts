@@ -73,7 +73,7 @@ const CAFE: Product = {
   title: "Café en grano 1kg",
   brand: "Tostado Sur",
   attrs: {},
-  category: "alimentos",
+  category: "food",
   presentation: { unit: "kg", sizePerPack: 1, packQty: 1 },
   priceArs: 18_500,
   stock: 40,
@@ -85,7 +85,7 @@ const PROMPT = "comprá 2kg de café para la semana";
 
 const BORRADOR: MandateDraft = {
   naturalLanguageDescription: PROMPT,
-  allowedCategories: ["alimentos", "limpieza"],
+  allowedCategories: ["food", "cleaning"],
   suggestedBudgetArs: 500_000,
   suggestedMaxPerPurchaseArs: 60_000,
   allowedSuppliers: ["distribuidora-norte"],
@@ -217,8 +217,11 @@ async function main(): Promise<void> {
     console.log(`   ${RED}✗ el vendedor rechazó: ${veredicto.failure}${RESET}\n   ${veredicto.detail}\n`);
     return;
   }
-  console.log(`   ${GREEN}✓${RESET} ${veredicto.checks.length} chequeos del vendedor, todos en verde`);
-  console.log(`   ${GREEN}✓${RESET} reserva on-chain ${DIM}${corto(result.presentation.authorizationId)}${RESET}`);
+  // El orden en que se imprime es el orden en que ocurrió: el agente reserva
+  // primero (dentro de `authorize`) y el vendedor verifica después.
+  console.log(`   ${GREEN}✓${RESET} el agente firmó el closed mandate y reservó on-chain ${DIM}${corto(result.presentation.authorizationId)}${RESET}`);
+  console.log(`   ${GREEN}✓${RESET} el vendedor recibió open + closed y corrió ${veredicto.checks.length} chequeos: todos en verde`);
+  console.log(`   ${GREEN}✓${RESET} firmó el recibo ${DIM}— sin él no se puede cobrar${RESET}`);
 
   // -------------------------------------------------------------------------
   paso(4, "Se retiene la plata — pero NO se mueve", `delegado de pago · ${pagos.provider}`);
@@ -228,6 +231,7 @@ async function main(): Promise<void> {
     settlement: chain,
     authorizations: chain,
     paymentDelegate: "0xDELEGADO",
+    merchantPublicKey: merchantKeys.publicKey,
     clock,
     audit: ctx.audit,
   });
@@ -237,6 +241,8 @@ async function main(): Promise<void> {
     instrument: tarjeta,
     merchantId: "distribuidora-norte",
     intentHash: result.presentation.closed.payload.checkout_hash,
+    // Sin el recibo del vendedor no hay cobro. Es un argumento obligatorio.
+    receipt: veredicto.receipt,
   });
 
   if (held.status !== "held") {
@@ -278,7 +284,7 @@ async function main(): Promise<void> {
 
   console.log(`   ${GREEN}${BOLD}✓ cobrado${RESET} ${formatMoney({ minor: cobro.capturedMinor, currency: cobro.capturedCurrency })}`);
   console.log(`   ${DIM}${cobro.captureRef}${RESET}`);
-  console.log(`   ${DIM}gastado del mandato: $${(await chain.read(issued.mandateId)).budgetSpentArs.toLocaleString("es-AR")} de $500.000${RESET}`);
+  console.log(`   ${DIM}gastado del mandato: $${(await chain.read(issued.mandateId)).budgetSpentArs.toLocaleString("es-AR")} de $${issued.terms.maxTotal / 100 / 1000}00.000${RESET}`);
 
   // -------------------------------------------------------------------------
   if (conDisputa) {

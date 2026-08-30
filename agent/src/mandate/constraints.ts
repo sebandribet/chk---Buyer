@@ -61,7 +61,7 @@ export function fromMinorUnits(minor: number): number {
  * esto y tener que hacer la cuenta a mano cada vez.
  */
 function money(minor: number, currency = "ARS"): string {
-  return `${currency} $${fromMinorUnits(minor).toLocaleString("es-AR")}`;
+  return `${currency} ${fromMinorUnits(minor).toLocaleString("en-US")}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     if (!permitidos.has(checkout.merchant.id)) {
       return fail(
         constraint.type,
-        `El vendedor "${checkout.merchant.id}" no está en la lista del mandato (${[...permitidos].join(", ") || "vacía"}).`,
+        `Merchant "${checkout.merchant.id}" is not on the mandate list (${[...permitidos].join(", ") || "empty"}).`,
       );
     }
 
@@ -105,10 +105,10 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     // un marketplace podría cerrar la venta él y surtirla desde cualquier lado.
     const ajenos = [...new Set(checkout.items.map((i) => i.supplierId))].filter((s) => !permitidos.has(s));
     if (ajenos.length > 0) {
-      return fail(constraint.type, `Ítems surtidos por proveedores fuera del mandato: ${ajenos.join(", ")}.`);
+      return fail(constraint.type, `Items supplied by suppliers outside the mandate: ${ajenos.join(", ")}.`);
     }
 
-    return ok(constraint.type, `Vendedor y proveedores dentro de la lista (${checkout.merchant.id}).`);
+    return ok(constraint.type, `Merchant and suppliers are on the list (${checkout.merchant.id}).`);
   },
 
   "checkout.allowed_categories": (constraint, { checkout }) => {
@@ -119,11 +119,11 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     if (fuera.length > 0) {
       return fail(
         constraint.type,
-        `Categorías fuera del mandato: ${fuera.join(", ")} (habilitadas: ${[...permitidas].join(", ") || "ninguna"}).`,
+        `Categories outside the mandate: ${fuera.join(", ")} (allowed: ${[...permitidas].join(", ") || "none"}).`,
       );
     }
 
-    return ok(constraint.type, `Todas las categorías habilitadas (${[...permitidas].join(", ")}).`);
+    return ok(constraint.type, `Every category is allowed (${[...permitidas].join(", ")}).`);
   },
 
   "checkout.max_amount": (constraint, { checkout }) => {
@@ -132,7 +132,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     if (checkout.currency !== constraint.currency) {
       return fail(
         constraint.type,
-        `El carrito está en ${checkout.currency} y el mandato autoriza ${constraint.currency}.`,
+        `The cart is in ${checkout.currency} and the mandate authorizes ${constraint.currency}.`,
       );
     }
 
@@ -143,14 +143,14 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     if (suma !== checkout.amount) {
       return fail(
         constraint.type,
-        `El total declarado (${money(checkout.amount, checkout.currency)}) no coincide con la suma de las líneas (${money(suma, checkout.currency)}).`,
+        `The declared total (${money(checkout.amount, checkout.currency)}) does not match the sum of the lines (${money(suma, checkout.currency)}).`,
       );
     }
 
     if (checkout.amount > constraint.maxPerOperation) {
       return fail(
         constraint.type,
-        `El carrito suma ${money(checkout.amount, checkout.currency)} y el techo por operación es ${money(constraint.maxPerOperation, constraint.currency)}.`,
+        `The cart totals ${money(checkout.amount, checkout.currency)} and the per-operation cap is ${money(constraint.maxPerOperation, constraint.currency)}.`,
       );
     }
 
@@ -160,7 +160,7 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     // límite completo, no para evaluarlo.
     return ok(
       constraint.type,
-      `Carrito de ${money(checkout.amount, checkout.currency)} dentro del techo por operación (${money(constraint.maxPerOperation, constraint.currency)}).`,
+      `Cart of ${money(checkout.amount, checkout.currency)} is within the per-operation cap (${money(constraint.maxPerOperation, constraint.currency)}).`,
     );
   },
 
@@ -170,11 +170,11 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
     if (checkout.deliveryDays > constraint.days) {
       return fail(
         constraint.type,
-        `Entrega en ${checkout.deliveryDays} días y el mandato acepta hasta ${constraint.days}.`,
+        `Delivery in ${checkout.deliveryDays} day(s) and the mandate accepts up to ${constraint.days}.`,
       );
     }
 
-    return ok(constraint.type, `Entrega en ${checkout.deliveryDays} días, dentro de los ${constraint.days} del mandato.`);
+    return ok(constraint.type, `Delivery in ${checkout.deliveryDays} day(s), within the mandate's ${constraint.days}.`);
   },
 
   /**
@@ -195,11 +195,11 @@ const EVALUATORS: Record<Constraint["type"], Evaluator> = {
       const lista = constraint.allowed.map((i) => `${i.brand} ····${i.last4}`).join(", ");
       return fail(
         constraint.type,
-        `Se paga con ${paymentInstrument.brand} ····${paymentInstrument.last4}, que el mandato no autoriza (habilitadas: ${lista || "ninguna"}).`,
+        `Paying with ${paymentInstrument.brand} ····${paymentInstrument.last4}, which the mandate does not authorize (allowed: ${lista || "none"}).`,
       );
     }
 
-    return ok(constraint.type, `Se paga con ${autorizado.brand} ····${autorizado.last4}, autorizada en el mandato.`);
+    return ok(constraint.type, `Paying with ${autorizado.brand} ····${autorizado.last4}, authorized in the mandate.`);
   },
 };
 

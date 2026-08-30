@@ -144,21 +144,21 @@ function checkoutMatchesRequest(
   checkout: CheckoutObject,
 ): { ok: true } | { ok: false; detail: string } {
   if (checkout.merchant.id !== request.merchantId) {
-    return { ok: false, detail: `El carrito volvió a nombre de "${checkout.merchant.id}".` };
+    return { ok: false, detail: `The cart came back under "${checkout.merchant.id}".` };
   }
   if (checkout.currency !== request.currency) {
-    return { ok: false, detail: `El carrito volvió en ${checkout.currency} y se pidió en ${request.currency}.` };
+    return { ok: false, detail: `The cart came back in ${checkout.currency} and was requested in ${request.currency}.` };
   }
   if (checkout.deliveryDays > request.deliveryDays) {
     return {
       ok: false,
-      detail: `El carrito promete entrega en ${checkout.deliveryDays} días y se pidió en ${request.deliveryDays}.`,
+      detail: `The cart promises delivery in ${checkout.deliveryDays} day(s) and ${request.deliveryDays} was requested.`,
     };
   }
   if (checkout.items.length !== request.items.length) {
     return {
       ok: false,
-      detail: `El carrito volvió con ${checkout.items.length} líneas y se pidieron ${request.items.length}.`,
+      detail: `The cart came back with ${checkout.items.length} lines and ${request.items.length} were requested.`,
     };
   }
 
@@ -166,19 +166,19 @@ function checkoutMatchesRequest(
   for (const item of checkout.items) {
     const pedida = pedidas.get(item.sku);
     if (pedida === undefined) {
-      return { ok: false, detail: `El carrito trae "${item.sku}", que no se pidió.` };
+      return { ok: false, detail: `The cart includes "${item.sku}", which was not requested.` };
     }
     if (item.quantity !== pedida.quantity || item.lineAmount !== pedida.lineAmount) {
       return {
         ok: false,
-        detail: `"${item.sku}": se pidieron ${pedida.quantity} por ${pedida.lineAmount} y volvió ${item.quantity} por ${item.lineAmount}.`,
+        detail: `"${item.sku}": ${pedida.quantity} for ${pedida.lineAmount} were requested and ${item.quantity} for ${item.lineAmount} came back.`,
       };
     }
   }
 
   const suma = checkout.items.reduce((acc, i) => acc + i.lineAmount, 0);
   if (suma !== checkout.amount) {
-    return { ok: false, detail: `El total firmado (${checkout.amount}) no es la suma de las líneas (${suma}).` };
+    return { ok: false, detail: `The signed total (${checkout.amount}) is not the sum of the lines (${suma}).` };
   }
 
   return { ok: true };
@@ -200,7 +200,7 @@ export async function authorize(
     return {
       status: "refused",
       reason: "constraint_violated",
-      detail: "El mandato no declara techo de monto. Sin ese constraint no hay nada que autorice gastar.",
+      detail: "The mandate declares no amount cap. Without that constraint nothing authorizes spending.",
       evaluations: [],
     };
   }
@@ -215,7 +215,7 @@ export async function authorize(
     return {
       status: "refused",
       reason: "checkout_tampered",
-      detail: "El carrito no está firmado por la clave del vendedor que dice ser.",
+      detail: "The cart is not signed by the key of the merchant it claims to be.",
       evaluations: [],
     };
   }
@@ -247,7 +247,7 @@ export async function authorize(
     return {
       status: "refused",
       reason: "constraint_violated",
-      detail: primera?.detail ?? "Un límite del mandato no se cumple.",
+      detail: primera?.detail ?? "A mandate limit is not satisfied.",
       evaluations: verdict.evaluations,
     };
   }

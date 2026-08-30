@@ -35,7 +35,7 @@ function parseArgs(argv: string[]): Args {
     revokeMidRun: false,
     expired: false,
     noMandate: false,
-    allow: ["alimentos", "limpieza", "descartables"],
+    allow: ["food", "cleaning", "disposables"],
     budget: 500_000,
   };
 

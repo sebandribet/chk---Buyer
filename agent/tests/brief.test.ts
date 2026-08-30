@@ -23,13 +23,13 @@ describe("ficha de pedido (committed)", () => {
 
     const brief = buildOrderBrief(intent);
 
-    expect(brief.unspecified).toContain("presupuesto");
-    expect(brief.unspecified).toContain("plazo de entrega");
-    expect(brief.unspecified).toContain("vigencia del pedido");
+    expect(brief.unspecified).toContain("budget");
+    expect(brief.unspecified).toContain("delivery window");
+    expect(brief.unspecified).toContain("request validity");
 
     // Y ningún número aparece de la nada.
     expect(brief.text).not.toMatch(/\$\s?\d/);
-    expect(brief.text).toContain("5 kg de arroz (tipo: yamani)");
+    expect(brief.text).toContain("5 kg of arroz (tipo: yamani)");
   });
 
   it("refleja exactamente lo que el pedido sí fijó", () => {
@@ -42,10 +42,10 @@ describe("ficha de pedido (committed)", () => {
     );
 
     const porEtiqueta = Object.fromEntries(brief.lines.map((l) => [l.label, l.value]));
-    expect(porEtiqueta["Techo de gasto"]).toBe("$20.000");
-    expect(porEtiqueta["Para cuándo"]).toBe("entrega en hasta 6 día(s)");
-    expect(porEtiqueta["Sustitutos"]).toBe("no se aceptan");
-    expect(brief.unspecified).not.toContain("presupuesto");
+    expect(porEtiqueta["Spending cap"]).toBe("$20,000");
+    expect(porEtiqueta["By when"]).toBe("delivered within 6 day(s)");
+    expect(porEtiqueta["Substitutes"]).toBe("not accepted");
+    expect(brief.unspecified).not.toContain("budget");
   });
 
   it("distingue cuando los sustitutos valen solo para algunos ítems", () => {
@@ -58,8 +58,8 @@ describe("ficha de pedido (committed)", () => {
       }),
     );
 
-    const sustitutos = brief.lines.find((l) => l.label === "Sustitutos")?.value;
-    expect(sustitutos).toBe("se aceptan solo para leche");
+    const sustitutos = brief.lines.find((l) => l.label === "Substitutes")?.value;
+    expect(sustitutos).toBe("accepted only for leche");
   });
 
   it("viaja con el intent hasta el carrito, para que el humano confirme lo que se entendió", async () => {
@@ -77,7 +77,7 @@ describe("ficha de pedido (committed)", () => {
     const run = await runAgent("Comprá 12 litros de leche descremada, hasta $200.000", "mandate_cafe_del_sur", h.deps, h.ctx);
 
     if (run.extraction.status !== "ok") throw new Error("esperaba extracción ok");
-    expect(run.extraction.intent.brief.text).toContain("12 L de leche (tipo: descremada)");
+    expect(run.extraction.intent.brief.text).toContain("12 L of leche (tipo: descremada)");
 
     // Y el prompt original se conserva al lado, sin reformular: en una disputa
     // importan los dos, y si difieren esa diferencia es la evidencia.

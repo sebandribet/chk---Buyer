@@ -228,14 +228,14 @@ app.delete("/api/whatsapp/session", async (_request, response) => {
 
 app.post("/api/whatsapp/test", async (_request, response) => {
   if (whatsapp.status !== "connected" || !whatsapp.socket?.user?.id) {
-    response.status(409).json({ error: "WhatsApp no está conectado" });
+    response.status(409).json({ error: "WhatsApp is not connected" });
     return;
   }
 
   try {
     const recipient = jidNormalizedUser(whatsapp.socket.user.id);
     await whatsapp.socket.sendMessage(recipient, {
-      text: "chk! Buyer conectado correctamente. Vas a recibir aquí las novedades de tu agente de compras.",
+      text: "chk! Buyer connected successfully. You'll get updates from your purchasing agent right here.",
     });
     response.json({ sent: true });
   } catch (error) {

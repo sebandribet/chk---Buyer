@@ -27,14 +27,14 @@ import type { AgentContext } from "./context.js";
 import { buildOrderBrief } from "./brief.js";
 
 const CATEGORIES = [
-  "alimentos",
-  "limpieza",
-  "descartables",
-  "bebidas_alcoholicas",
-  "equipamiento",
+  "food",
+  "cleaning",
+  "disposables",
+  "alcoholic_beverages",
+  "equipment",
 ] as const satisfies readonly Category[];
 
-const UNITS = ["L", "kg", "unidad"] as const satisfies readonly Unit[];
+const UNITS = ["L", "kg", "unit"] as const satisfies readonly Unit[];
 
 /**
  * Los `attrs` viajan como lista de pares y no como objeto: structured outputs
@@ -66,7 +66,7 @@ const RawExtraction = z.object({
   ),
   constraints: z.object({
     budget_ars: z.number().nullable(),
-    quality_preference: z.enum(["economica", "equilibrada", "premium"]),
+    quality_preference: z.enum(["cheapest", "balanced", "premium"]),
     allowed_categories: z.array(z.enum(CATEGORIES)),
     forbidden_categories: z.array(z.enum(CATEGORIES)),
     allowed_suppliers: z.array(z.string()).nullable(),
@@ -138,7 +138,7 @@ const JSON_SCHEMA: Record<string, unknown> = {
       ],
       properties: {
         budget_ars: { type: ["number", "null"] },
-        quality_preference: { type: "string", enum: ["economica", "equilibrada", "premium"] },
+        quality_preference: { type: "string", enum: ["cheapest", "balanced", "premium"] },
         allowed_categories: { type: "array", items: { type: "string", enum: [...CATEGORIES] } },
         forbidden_categories: { type: "array", items: { type: "string", enum: [...CATEGORIES] } },
         allowed_suppliers: { type: ["array", "null"], items: { type: "string" } },
@@ -178,66 +178,68 @@ const JSON_SCHEMA: Record<string, unknown> = {
  */
 function buildSystemPrompt(now: Date): string {
   const hoy = now.toISOString().slice(0, 10);
-  const diaSemana = now.toLocaleDateString("es-AR", { weekday: "long", timeZone: "UTC" });
+  const diaSemana = now.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
   return `${SYSTEM_PROMPT}
 
-Hoy es ${diaSemana} ${hoy}. Resolvé contra esa fecha cualquier plazo relativo.
+Today is ${diaSemana} ${hoy}. Resolve any relative deadline against that date.
 
-Distinguí dos cosas que se dicen parecido:
-- max_delivery_days: en cuántos días como máximo tiene que ESTAR ENTREGADO. "antes de la semana que viene", "para el viernes", "lo necesito ya", "urgente". Calculá los días desde hoy y poné el número. Si no hay plazo, null.
-- intent_expiry: hasta cuándo sigue VIGENTE este pedido, en ISO 8601. "válido hasta fin de mes", "durante esta semana". Si no lo dijo, null.
+Tell apart two things that sound alike:
+- max_delivery_days: the maximum number of days within which it must BE DELIVERED. "before next week", "by Friday", "I need it now", "urgent". Compute the days from today and put the number. If there is no deadline, null.
+- intent_expiry: how long this request stays VALID, in ISO 8601. "good until the end of the month", "during this week". If they did not say, null.
 
-Un pedido puede tener uno, el otro, los dos o ninguno. "Comprá antes del viernes" es max_delivery_days, no intent_expiry.
+A request can have one, the other, both or neither. "Buy it before Friday" is max_delivery_days, not intent_expiry.
 
-Lo que recibís puede ser una CONVERSACIÓN de varios turnos, no un pedido suelto. En ese caso:
-- Interpretá el pedido ACUMULADO, no solo el último mensaje. "Comprame café" + "2 kilos" + "que sea de buena marca" es un solo pedido de 2kg de café de marca.
-- Los mensajes posteriores refinan o corrigen a los anteriores. Si el humano dice "mejor 3 kilos", la cantidad final es 3.
-- Si el humano cambia de tema y pide otra cosa, el pedido es lo nuevo.
+What you receive may be a multi-turn CONVERSATION, not a single request. In that case:
+- Interpret the ACCUMULATED request, not just the last message. "Buy me coffee" + "2 kilos" + "make it a good brand" is one single request for 2kg of branded coffee.
+- Later messages refine or correct earlier ones. If the human says "make it 3 kilos instead", the final quantity is 3.
+- If the human changes topic and asks for something else, the request is the new thing.
 
-quality_preference — qué prioriza el humano cuando varias opciones cumplen:
-- "economica": pidió lo más barato, o no dijo nada al respecto. Es el default.
-- "equilibrada": pidió algo intermedio, o descartó explícitamente lo más barato sin pedir lo mejor.
-- "premium": pidió mejor calidad, primera marca, "el mejor", "que no sea el más barato", "algo bueno".
+quality_preference — what the human prioritizes when several options qualify:
+- "cheapest": they asked for the cheapest, or said nothing about it. This is the default.
+- "balanced": they asked for something mid-range, or explicitly ruled out the cheapest without asking for the best.
+- "premium": they asked for better quality, a name brand, "the best", "not the cheapest", "something good".
 
-brand_preference — solo si nombró una marca concreta ("quiero Lavazza", "de La Serenísima"). Si no nombró ninguna, null.
+brand_preference — only if they named a specific brand ("I want Lavazza", "the La Serenísima one"). If they named none, null.
 
-anchor — qué fijó el humano, la cantidad o la plata:
-- "quantity": dijo cuánto quiere llevar. "2 kilos de café", "10 litros de leche", "3 paquetes". Llená qty y unit; item_budget_ars va null.
-- "budget": dijo cuánta plata quiere gastar en ese ítem. "un café de 20 lucas", "traeme yerba por 15 mil", "$8.000 de servilletas". Llená item_budget_ars con el monto; qty poné 1 y unit la que corresponda al producto.
+anchor — what the human fixed, the quantity or the money:
+- "quantity": they said how much they want to take. "2 kilos of coffee", "10 liters of milk", "3 packs". Fill qty and unit; item_budget_ars is null.
+- "budget": they said how much money to spend on that item. "20 bucks worth of coffee", "get me 15 thousand of yerba", "$8,000 of napkins". Fill item_budget_ars with the amount; set qty to 1 and unit to whatever fits the product.
 
-"Un café" / "una yerba" NO es un kilo ni un litro: es UN envase. Si dice solo "un café" sin plata ni cantidad, preguntá cuánto necesita — no asumas 1 kg.
+"A coffee" / "a yerba" is NOT a kilo or a liter: it is ONE package. If they only say "a coffee" with no money and no quantity, ask how much they need — do not assume 1 kg.
 
-PLATA EN ARGENTINO. Convertí a número antes de cargar cualquier monto:
-- "20 lucas" = "20 mil" = "20k" = "20 palos verdes" NO — "luca" es mil pesos: 20 lucas = 20000
-- "un palo" = 1000000 (un millón)
-- "una gamba" = 100
-- "20 mangos" = 20 pesos; "mango" es simplemente peso
-- "$20.000" y "20.000 pesos" = 20000 (el punto es separador de miles, no decimal)`;
+MONEY. The business is in Argentina and every amount is in Argentine pesos (ARS). Convert to a plain number before filling any amount:
+- "20k" = "20 thousand" = 20000
+- "a grand" = 1000
+- "$20,000" and "20,000 pesos" = 20000 (the comma is a thousands separator, not a decimal point)
+- The human may fall back to Argentine slang even while writing in English. "luca" is a thousand pesos, so "20 lucas" = 20000; "un palo" = 1000000; "mango" is simply a peso, so "20 mangos" = 20.
+- Beware of European-style formatting: "20.000" written by an Argentine means 20000, not 20.`;
 }
 
-const SYSTEM_PROMPT = `Sos el módulo de comprensión de un agente de compras de insumos para un comercio gastronómico en Argentina.
+const SYSTEM_PROMPT = `You are the comprehension module of a purchasing agent that buys supplies for a food business in Argentina.
 
-Tu única tarea es traducir el pedido del humano a una estructura tipada. NO elegís productos, NO evaluás presupuestos, NO aprobás nada.
+Your only task is to translate the human's request into a typed structure. You do NOT pick products, you do NOT evaluate budgets, you do NOT approve anything.
 
-Reglas:
-1. No inventes datos que el humano no dijo. Si falta algo necesario, devolvé status="clarification_needed" y una pregunta concreta por cada hueco.
-2. Necesitás, para cada ítem: qué es (canonical), cuánto (qty) y en qué unidad. Si falta la cantidad, preguntá.
-3. Si el humano no dio presupuesto total, preguntá. Nunca asumas un techo.
-4. substitutes_allowed es false salvo que el humano diga explícitamente que acepta alternativas ("lo que haya", "o similar", "cualquier marca").
-5. canonical es el nombre genérico y singular del producto, en minúsculas, sin marca ni presentación: "leche", "cafe", "detergente", "servilletas". Las variantes van en attrs: {"key":"tipo","value":"descremada"}.
-6. Categorías válidas: alimentos, limpieza, descartables, bebidas_alcoholicas, equipamiento. allowed_categories son las que el humano restringió EN ESTE PEDIDO; forbidden_categories las que prohibió explícitamente. Si no dijo nada, van vacías: los permisos de fondo los da el mandato firmado, no el prompt. NUNCA preguntes qué categorías, proveedores o plazos están permitidos — no es algo que el humano defina acá.
-7. Si un término es ambiguo entre categorías (por ejemplo "bebidas", que puede ser alcohólica o no), preguntá en vez de elegir.
-8. intent_expiry en ISO 8601 solo si el humano puso un plazo. Si no, null.
-9. natural_language_description es el pedido original del humano, textual, sin reformular.
-10. Si status="ok", questions va vacío. Si status="clarification_needed", cargá needs y constraints con lo que sí pudiste extraer.
+Rules:
+1. Do not invent data the human did not say. If something necessary is missing, return status="clarification_needed" and one concrete question per gap.
+2. For each item you need: what it is (canonical), how much (qty) and in what unit. If the quantity is missing, ask.
+3. If the human gave no total budget, ask. Never assume a cap.
+4. substitutes_allowed is false unless the human explicitly says they accept alternatives ("whatever's there", "or similar", "any brand").
+5. canonical is the generic singular name of the product, lowercase, with no brand and no packaging — and it must be written in SPANISH, because it is matched against an Argentine catalog: "leche", "cafe", "detergente", "servilletas". Variants go in attrs, also in Spanish: {"key":"tipo","value":"descremada"}.
+   Use the SHORTEST everyday word an Argentine shopper would say out loud — the word on the shelf label, not a literal translation. One or two words. "espresso machine" is "cafetera", not "máquina de espresso"; "paper towels" is "rollo de cocina"; "bleach" is "lavandina"; "trash bags" is "bolsas de residuo"; "dish soap" is "detergente". A long literal translation finds nothing in the catalog.
+6. Valid categories: food, cleaning, disposables, alcoholic_beverages, equipment. allowed_categories are the ones the human restricted IN THIS REQUEST; forbidden_categories the ones they explicitly banned. If they said nothing, leave them empty: the underlying permissions come from the signed mandate, not from the prompt. NEVER ask which categories, suppliers or delivery windows are allowed — that is not something the human defines here.
+7. If a term is ambiguous across categories (for example "drinks", which may or may not be alcoholic), ask instead of choosing.
+8. intent_expiry in ISO 8601 only if the human set a deadline. Otherwise, null.
+9. natural_language_description is the human's original request, verbatim, not reworded. Keep it in whatever language they wrote it.
+10. If status="ok", questions is empty. If status="clarification_needed", fill needs and constraints with whatever you did manage to extract.
+11. Write questions in English — they are shown to the human in an English interface.
 
-commitment — cuán comprometido está el pedido. Clasificá por la ESTRUCTURA del pedido, nunca por el tono ni por cuánta seguridad transmite:
-- "committed": hay una orden de compra concreta. Verbo imperativo de compra (comprá, pedí, reponé, encargá) sobre ítems y cantidades identificables, sin condiciones pendientes.
-- "conditional": la compra depende de algo que todavía no pasó ("si baja de $X", "cuando llegue el pedido anterior", "si no hay stock de lo otro").
-- "exploratory": consulta, comparación o exploración. Preguntas ("cuánto sale", "qué opciones hay", "conviene más"), o menciones sin orden ("estoy viendo", "necesitaría en algún momento").
+commitment — how committed the request is. Classify by the STRUCTURE of the request, never by tone or by how confident it sounds:
+- "committed": there is a concrete purchase order. An imperative buying verb (buy, order, restock, get) over identifiable items and quantities, with no pending conditions.
+- "conditional": the purchase depends on something that has not happened yet ("if it drops below $X", "once the previous order arrives", "if the other one is out of stock").
+- "exploratory": a query, a comparison or browsing. Questions ("how much is", "what options are there", "which is better value"), or mentions without an order ("I'm looking at", "I'll need at some point").
 
-Ante la duda entre committed y exploratory, elegí exploratory. Que el agente sugiera de más es un problema menor; que compre de más, no.
-Un pedido escrito con mucha seguridad o urgencia NO es más "committed" por eso: mirá si hay una orden concreta, no cómo suena.`;
+When torn between committed and exploratory, choose exploratory. An agent that suggests too much is a minor problem; one that buys too much is not.
+A request written with great confidence or urgency is NOT more "committed" for that reason: look for a concrete order, not for how it sounds.`;
 
 function pairsToRecord(pairs: { key: string; value: string }[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -277,7 +279,7 @@ function findGaps(raw: RawExtraction): ClarificationQuestion[] {
   if (raw.constraints.budget_ars === null && raw.commitment === "committed" && !todosConPlata) {
     gaps.push({
       field: "constraints.budgetArs",
-      question: "¿Cuál es el presupuesto máximo para esta compra?",
+      question: "What's the maximum budget for this purchase?",
     });
   }
 
@@ -295,20 +297,27 @@ function findGaps(raw: RawExtraction): ClarificationQuestion[] {
     if (!Number.isFinite(n.qty) || n.qty <= 0) {
       gaps.push({
         field: `needs[${i}].qty`,
-        question: `¿Qué cantidad de ${n.canonical} necesitás?`,
+        question: `How much ${n.canonical} do you need?`,
       });
     }
   });
 
   if (raw.needs.length === 0) {
-    gaps.push({ field: "needs", question: "¿Qué productos necesitás comprar?" });
+    gaps.push({ field: "needs", question: "What products do you need to buy?" });
   }
 
   return gaps;
 }
 
+/**
+ * Los patrones siguen aceptando castellano además de inglés a propósito. El
+ * modelo escribe el `field` bastante libre y, con un catálogo y un negocio
+ * argentinos, sigue devolviendo "presupuesto" cada tanto. Que un patrón de más
+ * matchee no cuesta nada; que falte, sí: una pregunta por el presupuesto que no
+ * se reconoce como tal se duplica o frena un run que no debía frenarse.
+ */
 function isAboutBudget(field: string, question: string): boolean {
-  return /budget|presupuesto/i.test(field) || /presupuesto/i.test(question);
+  return /budget|presupuesto/i.test(field) || /budget|presupuesto/i.test(question);
 }
 
 /**
@@ -340,9 +349,9 @@ function isBlockingQuestion(field: string, question: string, commitment: Commitm
   if (commitment !== "committed") return false;
 
   if (isAboutBudget(field, question)) return true;
-  if (/attrs|atributo|marca|brand/i.test(field)) return false;
+  if (/attrs|atributo|attribute|marca|brand/i.test(field)) return false;
   if (/^constraints\./i.test(field)) return false;
-  if (/categor|proveedor|supplier|delivery|entrega|plazo/i.test(field)) return false;
+  if (/categor|proveedor|supplier|delivery|entrega|plazo|lead.?time/i.test(field)) return false;
   return true;
 }
 
@@ -357,7 +366,7 @@ function isBlockingQuestion(field: string, question: string, commitment: Commitm
 function questionTopic(q: ClarificationQuestion): string {
   if (isAboutBudget(q.field, q.question)) return "budget";
   const campo = q.field.toLowerCase();
-  if (/qty|cantidad/.test(campo)) return `qty:${campo.replace(/[^0-9]/g, "")}`;
+  if (/qty|quantity|cantidad|amount/.test(campo)) return `qty:${campo.replace(/[^0-9]/g, "")}`;
   if (/^needs$/.test(campo)) return "needs";
   return campo.replace(/[^a-z0-9]/g, "");
 }

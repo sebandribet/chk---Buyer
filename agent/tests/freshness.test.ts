@@ -30,25 +30,25 @@ const haceMinutos = (n: number) => new Date(AHORA.getTime() - n * 60_000).toISOS
 
 describe("vencimiento por volatilidad", () => {
   it("un precio de góndola aguanta días", () => {
-    expect(isStale(haceMinutos(60 * 24), "estable", AHORA)).toBe(false);
+    expect(isStale(haceMinutos(60 * 24), "stable", AHORA)).toBe(false);
   });
 
   it("el mismo precio con perfil intradía ya venció", () => {
     // El mecanismo tiene que soportar rubros de precio dinámico —vuelos,
     // hotelería— aunque hoy ninguno de los nuestros lo sea.
-    expect(isStale(haceMinutos(60 * 24), "intradia", AHORA)).toBe(true);
-    expect(isStale(haceMinutos(20), "intradia", AHORA)).toBe(false);
+    expect(isStale(haceMinutos(60 * 24), "intraday", AHORA)).toBe(true);
+    expect(isStale(haceMinutos(20), "intraday", AHORA)).toBe(false);
   });
 
   it("sin fecha, se considera vencido", () => {
     // Los productos del mock no tienen `source`. Tratarlos como frescos sería
     // asumir que un dato sin procedencia es confiable.
-    expect(isStale(undefined, "estable", AHORA)).toBe(true);
+    expect(isStale(undefined, "stable", AHORA)).toBe(true);
   });
 
   it("los escalones están ordenados de más a menos duradero", () => {
-    expect(TTL_MINUTES.estable).toBeGreaterThan(TTL_MINUTES.diario);
-    expect(TTL_MINUTES.diario).toBeGreaterThan(TTL_MINUTES.intradia);
+    expect(TTL_MINUTES.stable).toBeGreaterThan(TTL_MINUTES.daily);
+    expect(TTL_MINUTES.daily).toBeGreaterThan(TTL_MINUTES.intraday);
   });
 });
 
@@ -57,14 +57,14 @@ describe("categoría forzada de un rubro nuevo", () => {
   // buscar solo no puede terminar en una categoría más permisiva de la que le
   // corresponde: ahí se saltearía una restricción sin que nadie lo note.
   it("manda una bebida con alcohol a su categoría, gane lo que gane el modelo", () => {
-    expect(forcedCategory("whisky")).toBe("bebidas_alcoholicas");
-    expect(forcedCategory("vino tinto")).toBe("bebidas_alcoholicas");
-    expect(forcedCategory("fernet")).toBe("bebidas_alcoholicas");
+    expect(forcedCategory("whisky")).toBe("alcoholic_beverages");
+    expect(forcedCategory("vino tinto")).toBe("alcoholic_beverages");
+    expect(forcedCategory("fernet")).toBe("alcoholic_beverages");
   });
 
   it("manda un electrodoméstico a equipamiento", () => {
-    expect(forcedCategory("freidora industrial")).toBe("equipamiento");
-    expect(forcedCategory("heladera exhibidora")).toBe("equipamiento");
+    expect(forcedCategory("freidora industrial")).toBe("equipment");
+    expect(forcedCategory("heladera exhibidora")).toBe("equipment");
   });
 
   it("deja pasar un insumo común sin forzar nada", () => {
@@ -133,7 +133,7 @@ describe("refresco periódico", () => {
     title: canonical,
     brand: "x",
     attrs: {},
-    category: "limpieza",
+    category: "cleaning",
     presentation: { unit: "L", sizePerPack: 1, packQty: 1 },
     priceArs: 1000,
     stock: 5,
@@ -146,8 +146,8 @@ describe("refresco periódico", () => {
       { products: () => items, suppliers: () => SUPPLIERS, replace: () => {} },
       new StubLlmClient({}),
       { targets: [
-        { canonical: "lavandina", category: "limpieza" },
-        { canonical: "detergente", category: "limpieza" },
+        { canonical: "lavandina", category: "cleaning" },
+        { canonical: "detergente", category: "cleaning" },
       ] },
     );
 
@@ -164,8 +164,8 @@ describe("refresco periódico", () => {
       { products: () => items, suppliers: () => SUPPLIERS, replace: () => {} },
       new StubLlmClient({}),
       { targets: [
-        { canonical: "detergente", category: "limpieza" },
-        { canonical: "lavandina", category: "limpieza" },
+        { canonical: "detergente", category: "cleaning" },
+        { canonical: "lavandina", category: "cleaning" },
       ] },
     );
 
@@ -176,7 +176,7 @@ describe("refresco periódico", () => {
     const refresher = new CatalogRefresher(
       { products: () => [], suppliers: () => SUPPLIERS, replace: () => {} },
       new StubLlmClient({}),
-      { targets: [{ canonical: "yerba", category: "alimentos" }] },
+      { targets: [{ canonical: "yerba", category: "food" }] },
     );
     expect(refresher.stale(AHORA)).toHaveLength(1);
   });
@@ -190,8 +190,8 @@ describe("refresco periódico", () => {
         batchSize: 2,
         fetcher: tiendaCaida,
         targets: [
-          { canonical: "uno", category: "alimentos" },
-          { canonical: "dos", category: "alimentos" },
+          { canonical: "uno", category: "food" },
+          { canonical: "dos", category: "food" },
         ],
         onRefresh: (c) => refrescados.push(c),
       },

@@ -124,7 +124,7 @@ export class RefreshingCatalog implements CatalogPort {
         this.audit?.emit({
           type: "catalog_fetch_failed",
           canonical,
-          detail: `La búsqueda en vivo pasó los ${this.missTimeoutMs} ms y se siguió sin ella.`,
+          detail: `The live search exceeded ${this.missTimeoutMs} ms and was skipped.`,
         });
         return 0;
       }

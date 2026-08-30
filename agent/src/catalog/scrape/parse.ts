@@ -20,7 +20,7 @@ const UNIT_PATTERNS: { re: RegExp; unit: Unit; factor: number }[] = [
   { re: /(\d+(?:[.,]\d+)?)\s*(?:mls?|cc|mililitros?)\b/i, unit: "L", factor: 0.001 },
   // "u" suelta al final va última en la alternancia para que "20 Un" matchee
   // "un" y no se corte en "u". Sin ella, "Vasos x 20 U" quedaba sin cantidad.
-  { re: /(\d+(?:[.,]\d+)?)\s*(?:unidades?|uds?|un|rollos?|u)\b/i, unit: "unidad", factor: 1 },
+  { re: /(\d+(?:[.,]\d+)?)\s*(?:unidades?|uds?|un|rollos?|u)\b/i, unit: "unit", factor: 1 },
 ];
 
 /**
@@ -110,7 +110,7 @@ export function parseSize(name: string, prefer?: Unit): ParsedSize | null {
 const SANE_UNIT_PRICE_ARS: Record<Unit, { min: number; max: number }> = {
   kg: { min: 200, max: 400_000 },
   L: { min: 200, max: 400_000 },
-  unidad: { min: 5, max: 200_000 },
+  unit: { min: 5, max: 200_000 },
 };
 
 export function isSanePrice(priceArs: number, presentation: Presentation): boolean {

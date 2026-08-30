@@ -19,6 +19,7 @@ import type {
   RejectionReason,
 } from "@/contracts/index.js";
 import { budgetRemainingArs } from "@/contracts/index.js";
+import { ars } from "@/money.js";
 
 export interface PolicyCheck {
   check: string;
@@ -38,7 +39,7 @@ export interface OfferVerdict {
  *
  * Es intersección y no unión a propósito. El prompt no puede ampliar el
  * mandato; a lo sumo puede restringirlo más. Si el humano escribe "comprá
- * también una cafetera" y el mandato no habilita `equipamiento`, la cafetera no
+ * también una cafetera" y el mandato no habilita `equipment`, la cafetera no
  * entra — el mandato está firmado on-chain, el prompt es texto.
  */
 export function effectiveCategories(intent: PurchaseIntent, mandate: MandateState): Category[] {
@@ -77,7 +78,7 @@ export function checkOffer(
     return {
       allowed: false,
       reason: "category_forbidden",
-      detail: `Categoría "${product.category}" fuera del mandato (habilitadas: ${opts.categories.join(", ") || "ninguna"}).`,
+      detail: `Category "${product.category}" is outside the mandate (allowed: ${opts.categories.join(", ") || "none"}).`,
     };
   }
 
@@ -85,19 +86,19 @@ export function checkOffer(
     return {
       allowed: false,
       reason: "supplier_not_allowed",
-      detail: `Proveedor "${supplier.name}" fuera de la allowlist del mandato.`,
+      detail: `Supplier "${supplier.name}" is not on the mandate allowlist.`,
     };
   }
 
   if (product.stock === 0) {
-    return { allowed: false, reason: "out_of_stock", detail: `Sin stock en ${supplier.name}.` };
+    return { allowed: false, reason: "out_of_stock", detail: `Out of stock at ${supplier.name}.` };
   }
 
   if (product.stock < opts.packsNeeded) {
     return {
       allowed: false,
       reason: "insufficient_stock",
-      detail: `Hacen falta ${opts.packsNeeded} packs y hay ${product.stock} en ${supplier.name}.`,
+      detail: `Needs ${opts.packsNeeded} packs and ${supplier.name} has ${product.stock}.`,
     };
   }
 
@@ -105,11 +106,11 @@ export function checkOffer(
     return {
       allowed: false,
       reason: "delivery_too_slow",
-      detail: `Entrega en ${supplier.deliveryDays} días, el pedido acepta hasta ${opts.maxDeliveryDays}.`,
+      detail: `Delivers in ${supplier.deliveryDays} day(s), the request accepts up to ${opts.maxDeliveryDays}.`,
     };
   }
 
-  return { allowed: true, detail: `Habilitada: ${supplier.name}, $${offer.unitPriceArs.toFixed(2)}/${product.presentation.unit}.` };
+  return { allowed: true, detail: `Allowed: ${supplier.name}, $${offer.unitPriceArs.toFixed(2)}/${product.presentation.unit}.` };
 }
 
 export interface BudgetVerdict {
@@ -145,7 +146,7 @@ export function checkBudget(
     record(
       "prompt_budget",
       ok,
-      `Total $${totalArs.toLocaleString("es-AR")} vs presupuesto del pedido $${promptBudget.toLocaleString("es-AR")}.`,
+      `Total ${ars(totalArs)} vs the request budget ${ars(promptBudget)}.`,
       "over_budget",
     );
   }
@@ -155,7 +156,7 @@ export function checkBudget(
     record(
       "mandate_max_per_purchase",
       ok,
-      `Total $${totalArs.toLocaleString("es-AR")} vs techo por compra $${mandate.maxPerPurchaseArs.toLocaleString("es-AR")}.`,
+      `Total ${ars(totalArs)} vs per-purchase cap ${ars(mandate.maxPerPurchaseArs)}.`,
       "over_max_per_purchase",
     );
   }
@@ -165,7 +166,7 @@ export function checkBudget(
   record(
     "mandate_budget_remaining",
     ok,
-    `Total $${totalArs.toLocaleString("es-AR")} vs saldo del mandato $${remaining.toLocaleString("es-AR")}.`,
+    `Total ${ars(totalArs)} vs mandate remaining balance ${ars(remaining)}.`,
     "over_budget",
   );
 
@@ -173,5 +174,5 @@ export function checkBudget(
     const failure = firstFailure as { reason: RejectionReason; detail: string };
     return { passed: false, reason: failure.reason, detail: failure.detail, checks };
   }
-  return { passed: true, detail: `Total $${totalArs.toLocaleString("es-AR")} dentro de todos los límites.`, checks };
+  return { passed: true, detail: `Total ${ars(totalArs)} is within every limit.`, checks };
 }

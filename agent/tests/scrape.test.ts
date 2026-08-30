@@ -22,7 +22,7 @@ describe("parseo de tamaño", () => {
     { nombre: "Leche Entera DIA Larga Vida 1 Lt.", unit: "L", size: 1, pack: 1 },
     { nombre: "Detergente Lavavajilla DIA Limón 750 Ml.", unit: "L", size: 0.75, pack: 1 },
     { nombre: "Arroz Largo Fino Gallo 1 Kg", unit: "kg", size: 1, pack: 1 },
-    { nombre: "Papel Higiénico Elite x 4 Un", unit: "unidad", size: 4, pack: 1 },
+    { nombre: "Papel Higiénico Elite x 4 Un", unit: "unit", size: 4, pack: 1 },
     { nombre: "Aceite Girasol Natura 900 cc", unit: "L", size: 0.9, pack: 1 },
     { nombre: "Harina 000 Pureza 1,5 Kg", unit: "kg", size: 1.5, pack: 1 },
   ];
@@ -63,14 +63,14 @@ describe("parseo de tamaño", () => {
     const sinPreferencia = parseSize("Vasos Descartables 300 Cc X 20 U Mia Casa")!;
     expect(sinPreferencia.presentation.unit).toBe("L");
 
-    const conPreferencia = parseSize("Vasos Descartables 300 Cc X 20 U Mia Casa", "unidad")!;
-    expect(conPreferencia.presentation.unit).toBe("unidad");
+    const conPreferencia = parseSize("Vasos Descartables 300 Cc X 20 U Mia Casa", "unit")!;
+    expect(conPreferencia.presentation.unit).toBe("unit");
     expect(conPreferencia.presentation.sizePerPack * conPreferencia.presentation.packQty).toBe(20);
   });
 
   it("lee cantidades escritas con U sola", () => {
-    expect(parseSize("Servilletas x 100 U", "unidad")?.presentation.sizePerPack).toBe(100);
-    expect(parseSize("Rollo de Cocina 3 Un", "unidad")?.presentation.sizePerPack).toBe(3);
+    expect(parseSize("Servilletas x 100 U", "unit")?.presentation.sizePerPack).toBe(100);
+    expect(parseSize("Rollo de Cocina 3 Un", "unit")?.presentation.sizePerPack).toBe(3);
   });
 
   it("distingue gramos de kilos, que es el error caro", () => {
@@ -130,7 +130,7 @@ describe("outliers de precio", () => {
     title: sku,
     brand: "x",
     attrs: {},
-    category: "alimentos",
+    category: "food",
     presentation: { unit: "L", sizePerPack: 1, packQty: 1 },
     priceArs,
     stock: 10,

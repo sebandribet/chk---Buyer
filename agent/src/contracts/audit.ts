@@ -89,6 +89,25 @@ export type AuditEvent = AuditEventBase &
      */
     | { type: "injection_attempt_detected"; sku: string; supplierId: string; snippet: string }
     | { type: "policy_check"; check: string; passed: boolean; detail: string }
+    /**
+     * El humano revisó el borrador y lo firmó. Es el único evento del sistema
+     * que crea autoridad de gasto, y por eso lleva `editedFields`: la diferencia
+     * entre "aceptó lo que le pusieron adelante" y "bajó el techo y firmó eso".
+     */
+    | {
+        type: "mandate_signed";
+        mandateId: string;
+        policyHash: string;
+        /** Qué campos del borrador tocó el humano. Vacío = lo aceptó tal cual. */
+        editedFields: readonly string[];
+        /** Hash del borrador que el agente propuso, para poder cotejarlo después. */
+        proposedHash: string;
+        budgetArs: number;
+        maxPerPurchaseArs: number;
+        expiresAt: string;
+      }
+    /** El mandato se revocó. Lo que venga después choca contra el contrato, no contra un flag. */
+    | { type: "mandate_revoked"; mandateId: string }
     /** El merchant cerró el carrito y lo firmó. A partir de acá el precio no lo pone el agente. */
     | {
         type: "checkout_closed";

@@ -253,7 +253,7 @@ export async function verifyPresentation(
     return {
       ok: false,
       failure: "constraint_unknown",
-      detail: `El mandato trae un límite que este verificador no sabe evaluar (${desconocido?.type}). La spec obliga a rechazar: un límite que no se entiende no se ignora.`,
+      detail: `The mandate carries a constraint this verifier cannot evaluate (${desconocido?.type}). The spec requires rejecting: a constraint you do not understand is not one you ignore.`,
       checks,
     };
   }

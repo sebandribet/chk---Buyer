@@ -5,17 +5,17 @@
  * exige normalizar por unidad antes de decidir nada.
  */
 
-export type Unit = "L" | "kg" | "unidad";
+export type Unit = "L" | "kg" | "unit";
 
-/** Categorías del mandato. `equipamiento` existe para poder probar el caso de categoría prohibida. */
-export type Category = "alimentos" | "limpieza" | "descartables" | "bebidas_alcoholicas" | "equipamiento";
+/** Categorías del mandato. `equipment` existe para poder probar el caso de categoría prohibida. */
+export type Category = "food" | "cleaning" | "disposables" | "alcoholic_beverages" | "equipment";
 
 export const ALL_CATEGORIES: readonly Category[] = [
-  "alimentos",
-  "limpieza",
-  "descartables",
-  "bebidas_alcoholicas",
-  "equipamiento",
+  "food",
+  "cleaning",
+  "disposables",
+  "alcoholic_beverages",
+  "equipment",
 ];
 
 /**

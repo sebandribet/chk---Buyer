@@ -39,13 +39,13 @@ export interface RawIntentOptions {
     canonical: string;
     attrs?: Record<string, string>;
     qty: number;
-    unit: "L" | "kg" | "unidad";
+    unit: "L" | "kg" | "unit";
     substitutesAllowed?: boolean;
     anchor?: "quantity" | "budget";
     itemBudgetArs?: number | null;
   }[];
   budgetArs?: number | null;
-  qualityPreference?: "economica" | "equilibrada" | "premium";
+  qualityPreference?: "cheapest" | "balanced" | "premium";
   allowedCategories?: Category[];
   forbiddenCategories?: Category[];
   allowedSuppliers?: string[] | null;
@@ -71,7 +71,7 @@ export function rawIntent(opts: RawIntentOptions): unknown {
     })),
     constraints: {
       budget_ars: opts.budgetArs === undefined ? 200_000 : opts.budgetArs,
-      quality_preference: opts.qualityPreference ?? "economica",
+      quality_preference: opts.qualityPreference ?? "cheapest",
       allowed_categories: opts.allowedCategories ?? [],
       forbidden_categories: opts.forbiddenCategories ?? [],
       allowed_suppliers: opts.allowedSuppliers ?? null,
@@ -104,7 +104,7 @@ export function intentOf(opts: RawIntentOptions & { intentId?: string }): Purcha
     needs,
     constraints: {
       budgetArs: opts.budgetArs === undefined ? 200_000 : opts.budgetArs,
-      qualityPreference: opts.qualityPreference ?? "economica",
+      qualityPreference: opts.qualityPreference ?? "cheapest",
       allowedCategories: opts.allowedCategories ?? [],
       forbiddenCategories: opts.forbiddenCategories ?? [],
       allowedSuppliers: opts.allowedSuppliers ?? null,
@@ -124,7 +124,7 @@ export const DEFAULT_MANDATE: FakeMandateInit = {
   budgetTotalArs: 500_000,
   budgetSpentArs: 0,
   maxPerPurchaseArs: 200_000,
-  allowedCategories: ["alimentos", "limpieza", "descartables"],
+  allowedCategories: ["food", "cleaning", "disposables"],
   allowedSuppliers: null,
   expiresAt: "2026-09-30T00:00:00.000Z",
 };

@@ -145,7 +145,7 @@ describe("fuera del mandato", () => {
     const h = harness({ llm: {} });
 
     const outcome = await decide(
-      intentOf({ needs: [{ canonical: "cafetera", qty: 1, unit: "unidad" }] }),
+      intentOf({ needs: [{ canonical: "cafetera", qty: 1, unit: "unit" }] }),
       "mandate_cafe_del_sur",
       h.deps,
       h.ctx,
@@ -154,7 +154,7 @@ describe("fuera del mandato", () => {
     expect(outcome.status).toBe("rejection");
     if (outcome.status !== "rejection") throw new Error("unreachable");
     expect(outcome.reason).toBe("category_forbidden");
-    expect(outcome.rejected[0]?.detail).toContain("equipamiento");
+    expect(outcome.rejected[0]?.detail).toContain("equipment");
   });
 
   it("el prompt no puede ampliar el mandato, solo restringirlo", async () => {
@@ -164,8 +164,8 @@ describe("fuera del mandato", () => {
 
     const outcome = await decide(
       intentOf({
-        needs: [{ canonical: "cafetera", qty: 1, unit: "unidad" }],
-        allowedCategories: ["equipamiento"],
+        needs: [{ canonical: "cafetera", qty: 1, unit: "unit" }],
+        allowedCategories: ["equipment"],
       }),
       "mandate_cafe_del_sur",
       h.deps,
@@ -180,11 +180,11 @@ describe("fuera del mandato", () => {
   it("escala a un humano cuando excede el presupuesto, sin aprobar ni descartar solo", async () => {
     const h = harness({
       llm: {},
-      mandate: { allowedCategories: ["alimentos", "limpieza", "descartables", "equipamiento"] },
+      mandate: { allowedCategories: ["food", "cleaning", "disposables", "equipment"] },
     });
 
     const outcome = await decide(
-      intentOf({ needs: [{ canonical: "cafetera", qty: 1, unit: "unidad" }], budgetArs: 200_000 }),
+      intentOf({ needs: [{ canonical: "cafetera", qty: 1, unit: "unit" }], budgetArs: 200_000 }),
       "mandate_cafe_del_sur",
       h.deps,
       h.ctx,
@@ -312,7 +312,7 @@ describe("plazo de entrega", () => {
     // Y el descarte deja constancia de por qué se pagaron $5.400 de más.
     const descartada = outcome.rejected.find((r) => r.sku === "EST-ACE-G5");
     expect(descartada?.reason).toBe("delivery_too_slow");
-    expect(descartada?.detail).toContain("2 días");
+    expect(descartada?.detail).toContain("2 day(s)");
   });
 });
 
@@ -322,7 +322,7 @@ describe("mínimos de compra", () => {
     const h = harness({ llm: {} });
 
     const outcome = await decide(
-      intentOf({ needs: [{ canonical: "servilletas", qty: 500, unit: "unidad" }] }),
+      intentOf({ needs: [{ canonical: "servilletas", qty: 500, unit: "unit" }] }),
       "mandate_cafe_del_sur",
       h.deps,
       h.ctx,
@@ -383,7 +383,7 @@ describe("anclaje en plata: \"un café de 20 lucas\"", () => {
       canonical: "cafe",
       attrs: { tipo: "molido" },
       qty: 1,
-      unit: "unidad" as const,
+      unit: "unit" as const,
       anchor: "budget" as const,
       itemBudgetArs: 20_000,
     },
@@ -451,8 +451,8 @@ describe("las gamas salen del precio por unidad", () => {
     const porGama = Object.fromEntries(
       (s.alternatives[0]?.options ?? []).map((o) => [o.tier, o.candidate.offer.unitPriceArs]),
     );
-    expect(porGama["economica"]).toBeLessThan(porGama["premium"]!);
-    expect(porGama["intermedia"]).toBeGreaterThan(porGama["economica"]!);
-    expect(porGama["intermedia"]).toBeLessThan(porGama["premium"]!);
+    expect(porGama["budget"]).toBeLessThan(porGama["premium"]!);
+    expect(porGama["midrange"]).toBeGreaterThan(porGama["budget"]!);
+    expect(porGama["midrange"]).toBeLessThan(porGama["premium"]!);
   });
 });

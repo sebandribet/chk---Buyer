@@ -10,7 +10,7 @@
     "constraints": {
       "budget_ars": 50000,
       "allowed_categories": [
-        "limpieza"
+        "cleaning"
       ],
       "forbidden_categories": [],
       "allowed_suppliers": null,

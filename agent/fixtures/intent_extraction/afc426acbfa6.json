@@ -31,11 +31,11 @@
         "field": "constraints.allowed_categories",
         "question": "¿Hay alguna categoría de productos que deba considerar o evitar?",
         "options": [
-          "alimentos",
-          "limpieza",
-          "descartables",
-          "bebidas_alcoholicas",
-          "equipamiento"
+          "food",
+          "cleaning",
+          "disposables",
+          "alcoholic_beverages",
+          "equipment"
         ]
       }
     ]

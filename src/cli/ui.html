@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chk buyer — purchasing agent</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#262b36; --text:#e6e8ee;
+    --dim:#8b93a7; --accent:#6ea8fe; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.55 system-ui,-apple-system,sans-serif; display:flex; flex-direction:column; }
+
+  header { padding:14px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:22px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:15px; font-weight:600; }
+  .tabs { display:flex; gap:4px; }
+  .tab { background:none; border:1px solid transparent; color:var(--dim); padding:6px 14px;
+         border-radius:7px; font:inherit; font-size:13.5px; cursor:pointer; }
+  .tab:hover { color:var(--text); }
+  .tab[aria-selected="true"] { background:var(--panel2); border-color:var(--line); color:var(--text); }
+  .meta { margin-left:auto; color:var(--dim); font-size:12px; font-family:var(--mono); }
+
+  main { flex:1; display:grid; grid-template-columns:250px 1fr; min-height:0; }
+  @media (max-width:820px){ main { grid-template-columns:1fr; } aside { display:none; } }
+
+  aside { border-right:1px solid var(--line); padding:20px; overflow-y:auto; }
+  aside h2 { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+             color:var(--dim); margin:0 0 11px; font-weight:600; }
+  aside h2:not(:first-child) { margin-top:24px; }
+  .toggle { display:flex; gap:9px; align-items:flex-start; cursor:pointer;
+            font-size:13.5px; margin-bottom:9px; }
+  .toggle input { margin-top:3px; accent-color:var(--accent); }
+  .toggle small { display:block; color:var(--dim); font-size:11.5px; }
+  .example { display:block; width:100%; text-align:left; background:none; font:inherit;
+             border:1px solid var(--line); color:var(--dim); border-radius:7px;
+             padding:8px 10px; font-size:12.5px; cursor:pointer; margin-bottom:6px; }
+  .example:hover { border-color:var(--accent); color:var(--text); }
+  .reset { width:100%; background:none; border:1px solid var(--line); color:var(--dim);
+           border-radius:7px; padding:8px; font:inherit; font-size:12.5px; cursor:pointer; margin-top:8px; }
+  .reset:hover { border-color:var(--bad); color:var(--bad); }
+
+  .panel { min-height:0; display:none; flex-direction:column; }
+  .panel[data-active="true"] { display:flex; }
+
+  /* ---------- chat ---------- */
+  #chatLog { flex:1; overflow-y:auto; padding:24px 28px; display:flex;
+             flex-direction:column; gap:16px; }
+  .msg { max-width:660px; }
+  .msg.user { align-self:flex-end; background:var(--accent); color:#0b1220;
+              padding:10px 14px; border-radius:14px 14px 4px 14px; }
+  .msg.agent { align-self:flex-start; background:var(--panel); border:1px solid var(--line);
+               padding:13px 16px; border-radius:14px 14px 14px 4px; }
+  .msg.agent.thinking { color:var(--dim); font-style:italic; }
+  .msg p { margin:0 0 8px; } .msg p:last-child { margin-bottom:0; }
+  .badge { display:inline-block; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+           padding:2px 8px; border-radius:20px; margin-bottom:9px; font-weight:600; }
+  .b-ok { background:rgba(74,222,128,.14); color:var(--ok); }
+  .b-info { background:rgba(110,168,254,.14); color:var(--accent); }
+  .b-warn { background:rgba(251,191,36,.14); color:var(--warn); }
+  .b-bad { background:rgba(248,113,113,.14); color:var(--bad); }
+
+  .cart { list-style:none; margin:10px 0 0; padding:0; }
+  .cart li { padding:8px 0; border-top:1px solid var(--line); font-size:14px; }
+  .cart small { display:block; color:var(--dim); font-size:12px; margin-top:2px; }
+  .total { margin-top:10px; font-weight:600; }
+  .alts { margin:12px 0 0; }
+  .alts h4 { margin:0 0 6px; font-size:11px; text-transform:uppercase;
+             letter-spacing:.06em; color:var(--dim); font-weight:600; }
+  .alt { display:flex; gap:10px; align-items:baseline; padding:7px 0;
+         border-top:1px solid var(--line); font-size:13.5px; }
+  .alt .tier { flex:none; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+               padding:2px 7px; border-radius:20px; background:var(--panel2); color:var(--dim); }
+  .alt .tier.premium { color:var(--accent); }
+  .alt .price { margin-left:auto; flex:none; font-weight:600; white-space:nowrap; }
+  .alt .unit { color:var(--dim); font-size:11.5px; display:block; font-weight:400; }
+  .alt .over { color:var(--warn); font-size:11.5px; display:block; font-weight:400; }
+  .alt .name { color:var(--text); }
+  .qopts { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .qopt { background:var(--panel2); border:1px solid var(--line); color:var(--text);
+          border-radius:20px; padding:5px 13px; font:inherit; font-size:13px; cursor:pointer; }
+  .qopt:hover { border-color:var(--accent); }
+  .qlist { margin:8px 0 0; padding-left:18px; }
+  .qlist li { margin-bottom:5px; }
+
+  .composer { border-top:1px solid var(--line); padding:16px 28px; display:flex; gap:10px; }
+  .composer textarea { flex:1; resize:none; min-height:44px; max-height:150px; padding:11px 14px;
+                       background:var(--panel); color:var(--text); border:1px solid var(--line);
+                       border-radius:10px; font:inherit; }
+  .composer textarea:focus { outline:none; border-color:var(--accent); }
+  .composer button { padding:0 22px; border:none; border-radius:10px; background:var(--accent);
+                     color:#0b1220; font:inherit; font-weight:600; cursor:pointer; }
+  .composer button:disabled { opacity:.45; cursor:default; }
+
+  /* ---------- behind the chat ---------- */
+  #behind { overflow-y:auto; padding:24px 28px; gap:0; }
+  .empty { color:var(--dim); }
+  section.blk { margin-bottom:26px; }
+  section.blk > h3 { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+                     color:var(--dim); margin:0 0 10px; font-weight:600; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:14px 16px; }
+  pre.prompt { margin:0; font-family:var(--mono); font-size:12.5px; line-height:1.65;
+               white-space:pre-wrap; word-break:break-word; color:var(--text); }
+  dl.kv { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; margin:0; font-size:13.5px; }
+  dl.kv dt { color:var(--dim); }
+  dl.kv dd { margin:0; }
+  .miss { color:var(--warn); }
+  .trail { font-family:var(--mono); font-size:12.5px; line-height:1.7; overflow-x:auto; }
+  .ev { white-space:pre-wrap; word-break:break-word; }
+  .e-ok{color:var(--ok);} .e-bad{color:var(--bad);} .e-warn{color:var(--warn);}
+  .e-info{color:var(--accent);} .e-dim{color:var(--dim);}
+  .runsep { color:var(--dim); border-top:1px dashed var(--line); margin:14px 0 10px; padding-top:10px; }
+
+  /* ---------- mandate: sidebar box ---------- */
+  .tab-count { display:inline-block; min-width:16px; padding:0 5px; border-radius:20px;
+               background:var(--panel2); color:var(--dim); font-size:11px; line-height:16px;
+               text-align:center; }
+  .tab[aria-selected="true"] .tab-count { background:var(--accent); color:#0b1220; }
+  .mandate-box { font-size:12.5px; }
+  .mandate-box .none { color:var(--dim); }
+  .mb-state { display:inline-block; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+              padding:2px 8px; border-radius:20px; font-weight:600; margin-bottom:10px; }
+  .mb-signed { background:rgba(74,222,128,.14); color:var(--ok); }
+  .mb-draft  { background:rgba(251,191,36,.14); color:var(--warn); }
+  .mb-revoked{ background:rgba(248,113,113,.14); color:var(--bad); }
+  .mb-row { display:flex; justify-content:space-between; gap:8px; padding:4px 0; color:var(--dim); }
+  .mb-row b { color:var(--text); font-weight:500; text-align:right; }
+  .mb-btn { width:100%; border:none; border-radius:7px; padding:9px; font:inherit; font-size:12.5px;
+            font-weight:600; cursor:pointer; margin-top:10px; }
+  .mb-btn.primary { background:var(--accent); color:#0b1220; }
+  .mb-btn.danger  { background:none; border:1px solid var(--line); color:var(--dim); }
+  .mb-btn.danger:hover { border-color:var(--bad); color:var(--bad); }
+  .mb-btn:disabled { opacity:.45; cursor:default; }
+  .mb-edit { width:100%; margin-top:6px; padding:7px 9px; background:var(--panel); color:var(--text);
+             border:1px solid var(--line); border-radius:7px; font:inherit; font-size:12.5px; }
+  .mb-edit:focus { outline:none; border-color:var(--accent); }
+  .mb-label { display:block; color:var(--dim); font-size:11px; margin:8px 0 2px; }
+
+  /* ---------- mandate: full panel ---------- */
+  #mandates { overflow-y:auto; padding:24px 28px; }
+  .cred { background:var(--panel); border:1px solid var(--line); border-radius:9px;
+          padding:16px 18px; margin-bottom:16px; }
+  .cred-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .cred-head h3 { margin:0; font-size:13px; font-weight:600; }
+  .cred-head .who { margin-left:auto; font-size:11.5px; color:var(--dim); font-family:var(--mono); }
+  .anchor { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-family:var(--mono);
+            font-size:12px; margin:10px 0 0; }
+  .anchor dt { color:var(--dim); } .anchor dd { margin:0; word-break:break-all; }
+  .jwt { font-family:var(--mono); font-size:11px; color:var(--dim); word-break:break-all;
+         background:#101319; border:1px solid var(--line); border-radius:7px; padding:9px 11px;
+         margin-top:10px; max-height:96px; overflow-y:auto; }
+  .pills { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .pill { font-size:11px; padding:3px 9px; border-radius:20px; }
+  .pill.shown { background:rgba(74,222,128,.12); color:var(--ok); }
+  .pill.held  { background:rgba(139,147,167,.14); color:var(--dim); text-decoration:line-through; }
+  .cred-refused { border-color:rgba(248,113,113,.4); }
+  .edited-tag { color:var(--warn); font-size:11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Chk buyer</h1>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-panel="chat">Chat</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="behind">Behind the chat</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="mandates">Mandates <span class="tab-count" id="mandateCount"></span></button>
+  </div>
+  <div class="meta" id="meta"></div>
+</header>
+
+<main>
+  <aside>
+    <h2>Mandate</h2>
+    <div id="mandateBox" class="mandate-box"></div>
+
+    <h2>Examples</h2>
+    <button class="example" data-p="Buy 6 liters of whole milk and 2 kilos of ground coffee, up to $120,000">Concrete order</button>
+    <button class="example" data-p="How much would it cost me to restock 6 liters of milk and 2 kilos of coffee?">Query</button>
+    <button class="example" data-p="Buy me coffee">Missing info &rarr; asks back</button>
+    <button class="example" data-p="Buy 5 liters of dish soap, up to $20,000">Product with injection</button>
+    <button class="example" data-p="Buy a new espresso machine, up to $200,000">Out of category</button>
+
+    <button class="reset" id="reset">Start over</button>
+  </aside>
+
+  <div class="panel" data-panel="chat" data-active="true">
+    <div id="chatLog"></div>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Ask the agent for something…"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </div>
+
+  <div class="panel" data-panel="mandates" id="mandates"></div>
+
+  <div class="panel" data-panel="behind" id="behind">
+    <p class="empty">Nothing has run yet. Send the agent a message and you'll see what it builds under the hood.</p>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+// Mismo formato que `agent/src/money.ts`. Si uno cambia, el otro también:
+// la guarda contra cifras inventadas del agente parsea este mismo formato.
+const ars = (n) => "$" + Math.round(Number(n)).toLocaleString("en-US");
+
+// La conversación vive acá: el agente no guarda estado entre turnos y cada run
+// recibe la charla completa. Un "pero quiero de mejor calidad" no es la
+// respuesta a una pregunta, es un refinamiento del pedido — sin el historial
+// entero se leería como un pedido nuevo y perdería todo el contexto.
+const state = {
+  messages: [],   // [{role:"user"|"agent", content}]
+  runs: [],       // historial para la pestaña de atrás
+  mandates: null, // snapshot del open/closed que devuelve el server
+  canExecute: false,
+};
+
+/* ---------------- chat ---------------- */
+
+function bubble(html, who = "agent", extraClass = "") {
+  const div = document.createElement("div");
+  div.className = `msg ${who} ${extraClass}`;
+  div.innerHTML = html;
+  $("chatLog").appendChild(div);
+  $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  return div;
+}
+
+const TIER_LABEL = { budget: "budget", midrange: "mid-range", premium: "premium" };
+
+/**
+ * Al cotizar se muestra el abanico, no un único ganador: la pregunta "¿qué hay?"
+ * no se contesta con un solo producto. Las que se pasan del presupuesto se
+ * muestran igual, marcadas — esconderlas es contestar de menos.
+ */
+function alternativasHtml(alternatives) {
+  if (!alternatives || alternatives.length === 0) return "";
+  return alternatives.map(a => `
+    <div class="alts">
+      <h4>${esc(a.need.qty)}${esc(a.need.unit)} of ${esc(a.need.canonical)}</h4>
+      ${a.options.map(o => `
+        <div class="alt">
+          <span class="tier ${o.tier}">${esc(TIER_LABEL[o.tier] ?? o.tier)}</span>
+          <span class="name">${esc(o.candidate.offer.product.title)}
+            <small style="color:var(--dim);display:block">${esc(o.candidate.offer.supplier.name)} · ${esc(o.candidate.qtyPacks)} pack(s)</small></span>
+          <span class="price">${ars(o.candidate.lineTotalArs)}
+            <span class="unit">${ars(o.candidate.offer.unitPriceArs)}/${esc(o.candidate.offer.product.presentation.unit)}</span>
+            ${o.vsBudget === "above" ? '<span class="over">over budget</span>' : ""}</span>
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+function cartHtml(lines) {
+  return `<ul class="cart">${lines.map(l => `
+    <li>${l.candidate.qtyPacks}× ${esc(l.candidate.offer.product.title)}
+      <small>${esc(l.candidate.offer.supplier.name)} · ${ars(l.candidate.lineTotalArs)}</small></li>`).join("")}</ul>`;
+}
+
+/**
+ * La pregunta la hace el texto del agente; acá solo se agregan las opciones
+ * como botones, cuando las hay. Repetir la pregunta debajo de su propia
+ * redacción se lee como un formulario, no como una charla.
+ */
+function opcionesHtml(questions) {
+  const opts = questions[0]?.options ?? [];
+  if (opts.length === 0) return "";
+  return `<div class="qopts">${opts.map(o =>
+    `<button class="qopt" data-a="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+}
+
+/**
+ * El texto lo redacta el agente; acá solo se agrega lo que conviene ver como
+ * dato y no como prosa (el carrito, los botones de opción). El estado —listo
+ * para comprar, necesita aprobación, no puede— va como etiqueta chica, no como
+ * párrafo: es información de la interfaz, no algo que el agente diga.
+ */
+function renderAgentTurn(data) {
+  const { extraction, outcome, suggestion, reply } = data;
+  const partes = [];
+
+  if (extraction.status === "clarification_needed") {
+    partes.push(`<p>${esc(reply)}</p>`, opcionesHtml(extraction.questions));
+  } else if (suggestion) {
+    partes.push(`<span class="badge b-info">Quote</span><p>${esc(reply)}</p>`);
+    partes.push(alternativasHtml(suggestion.alternatives));
+    if (suggestion.lines.length && !suggestion.alternatives.length) {
+      partes.push(cartHtml(suggestion.lines),
+        `<p class="total">${ars(suggestion.estimatedTotalArs)}</p>`);
+    }
+  } else if (outcome && outcome.status === "proposal") {
+    partes.push(`<span class="badge b-ok">Ready to buy</span><p>${esc(reply)}</p>`,
+      cartHtml(outcome.cart.lines),
+      `<p class="total">Total ${ars(outcome.cart.totalArs)} · arrives in ${outcome.cart.deliveryDays} day(s)</p>`);
+  } else if (outcome && outcome.status === "escalation") {
+    partes.push(`<span class="badge b-warn">Needs your sign-off</span><p>${esc(reply)}</p>`,
+      cartHtml(outcome.cart.lines),
+      `<p class="total">${ars(outcome.cart.totalArs)}</p>`);
+  } else {
+    partes.push(`<span class="badge b-bad">Can\u2019t do it</span><p>${esc(reply)}</p>`);
+  }
+
+  bubble(partes.join(""));
+  state.messages.push({ role: "agent", content: reply });
+}
+
+/* ---------------- behind the chat ---------------- */
+
+const EVENT_CLASS = {
+  run_started:"e-dim", intent_extracted:"e-info", commitment_assessed:"e-info",
+  search_brief_built:"e-info", clarification_requested:"e-warn", mandate_read:"e-dim",
+  search_executed:"e-info", candidate_scored:"e-ok", candidate_rejected:"e-bad",
+  substitution_evaluated:"e-info", injection_attempt_detected:"e-warn",
+  policy_check:"", outcome_emitted:"",
+};
+
+function eventText(e) {
+  switch (e.type) {
+    case "run_started": return `▶ run · mandate ${e.mandateId}`;
+    case "intent_extracted": return `✓ intent · ${e.intent.needs.map(n=>`${n.qty}${n.unit} ${n.canonical}`).join(" · ")}`;
+    case "commitment_assessed": return `◆ commitment ${e.level} → ${e.executes?"executes":"suggests only"} · ${e.detail}`;
+    case "search_brief_built": return `⌕ brief · ${e.text}\n     ${e.rationale}`;
+    case "clarification_requested": return `? asks back · ${e.questions.map(q=>q.question).join(" | ")}`;
+    case "mandate_read": return `⛓ mandate (${e.phase}) · active=${e.state.active} revoked=${e.state.revokedAt ?? "no"}`;
+    case "search_executed": return `⌕ ${e.canonical} → ${e.resultCount} offers`;
+    case "candidate_scored": return `  · ${e.sku} (${e.supplierId}) ${ars(e.unitPriceArs)}/u · ${e.kind}`;
+    case "candidate_rejected": return `  ✗ ${e.rejected.sku} — ${e.rejected.reason}: ${e.rejected.detail}`;
+    case "substitution_evaluated": return `  ⇄ ${e.sku} ${e.accepted?"accepted":"rejected"} (${e.decidedBy}) — ${e.detail}`;
+    case "injection_attempt_detected": return `  ⚠ PROMPT INJECTION en ${e.sku}: "${e.snippet}"`;
+    case "policy_check": return `  ${e.passed?"✓":"✗"} ${e.check} — ${e.detail}`;
+    case "outcome_emitted": return `■ ${e.outcome}${e.reason?` (${e.reason})`:""}`;
+    default: return e.type;
+  }
+}
+
+function briefHtml(intent) {
+  const rows = intent.brief.lines.map(l =>
+    `<dt>${esc(l.label)}</dt><dd>${esc(l.value)}</dd>`).join("");
+  const miss = intent.brief.unspecified.length
+    ? `<dt class="miss">unspecified</dt><dd class="miss">${esc(intent.brief.unspecified.join(", "))}</dd>` : "";
+  return `<dl class="kv">${rows}${miss}</dl>`;
+}
+
+function renderBehind() {
+  if (state.runs.length === 0) return;
+  const last = state.runs[state.runs.length - 1];
+  const intent = last.extraction.status === "ok" ? last.extraction.intent : null;
+
+  const partes = [];
+
+  partes.push(`<section class="blk"><h3>Effective prompt — what the model actually received</h3>
+    <div class="card"><pre class="prompt">${esc(last.effectivePrompt)}</pre></div>
+    <p style="margin:8px 0 0;color:var(--dim);font-size:12.5px">
+      The agent keeps no state between turns: every run receives the original request plus
+      the accumulated clarifications. That's why a run can be reproduced from this alone.</p>
+  </section>`);
+
+  if (intent) {
+    partes.push(`<section class="blk"><h3>Order brief — the robust reconstruction</h3>
+      <div class="card">${briefHtml(intent)}</div>
+      <p style="margin:8px 0 0;color:var(--dim);font-size:12.5px">
+        Generated from the already-validated structure, not from the text: by construction it
+        cannot assert anything you did not say. What's missing is declared missing.</p>
+    </section>`);
+
+    const gate = last.events.find(e => e.type === "commitment_assessed");
+    if (gate) {
+      partes.push(`<section class="blk"><h3>Decision: buy or suggest</h3>
+        <div class="card"><dl class="kv">
+          <dt>commitment</dt><dd>${esc(gate.level)}</dd>
+          <dt>executes</dt><dd>${gate.executes ? "yes" : "no"}</dd>
+          <dt>why</dt><dd>${esc(gate.detail)}</dd>
+        </dl></div></section>`);
+    }
+  }
+
+  const inj = last.events.filter(e => e.type === "injection_attempt_detected");
+  if (inj.length) {
+    partes.push(`<section class="blk"><h3>Manipulation attempts detected</h3>
+      <div class="card">${inj.map(e =>
+        `<p style="margin:0 0 6px"><strong>${esc(e.sku)}</strong> <span style="color:var(--dim)">(${esc(e.supplierId)})</span><br>
+         <span style="color:var(--warn);font-family:var(--mono);font-size:12.5px">"${esc(e.snippet)}"</span></p>`).join("")}
+      <p style="margin:8px 0 0;color:var(--dim);font-size:12.5px">
+        Seller text never enters a prompt: it is logged to leave a record that it arrived
+        and had no effect.</p></div></section>`);
+  }
+
+  const trail = state.runs.map((r, i) => {
+    const sep = state.runs.length > 1
+      ? `<div class="runsep">turn ${i + 1} · ${r.events.length} events</div>` : "";
+    return sep + r.events.map(e =>
+      `<div class="ev ${EVENT_CLASS[e.type] ?? ""}">${esc(eventText(e))}</div>`).join("");
+  }).join("");
+
+  partes.push(`<section class="blk"><h3>Audit trail</h3>
+    <div class="card trail">${trail}</div></section>`);
+
+  $("behind").innerHTML = partes.join("");
+}
+
+/* ---------------- mandates ---------------- */
+
+const CLAIM_LABEL = {
+  razonSocial: "legal name", cuit: "tax id", direccionEntrega: "delivery address",
+  contactoNombre: "contact name", contactoTelefono: "phone", contactoEmail: "email",
+};
+
+/**
+ * El costado del mandato en la barra: qué hay firmado, o el borrador esperando
+ * revisión. La firma vive acá y no en el chat a propósito — es un acto del
+ * humano sobre un permiso de gasto, no un mensaje más de la conversación.
+ */
+function renderMandateBox() {
+  const box = $("mandateBox");
+  const m = state.mandates;
+
+  if (!m || (!m.open && !m.form)) {
+    box.innerHTML = `<p class="none">No mandate yet. Ask for a purchase and the agent will draft one for you to sign.</p>`;
+    return;
+  }
+
+  // Ya firmado: estado real de la cadena, y el botón de ejecutar/revocar.
+  if (m.open) {
+    const revoked = m.open.state && m.open.state.active === false;
+    const s = m.open.payload;
+    box.innerHTML = `
+      <span class="mb-state ${revoked ? "mb-revoked" : "mb-signed"}">${revoked ? "revoked" : "signed"}</span>
+      <div class="mb-row"><span>budget</span><b>${ars(m.open.state.budgetTotalArs)}</b></div>
+      <div class="mb-row"><span>per purchase</span><b>${ars(m.open.state.maxPerPurchaseArs ?? 0)}</b></div>
+      <div class="mb-row"><span>categories</span><b>${esc((catsOf(s) || []).join(", "))}</b></div>
+      <div class="mb-row"><span>expires</span><b>${esc((s.exp ? new Date(s.exp*1000).toISOString().slice(0,10) : "—"))}</b></div>
+      ${revoked ? "" : `<button class="mb-btn primary" id="btnExec" ${state.canExecute ? "" : "disabled"}>Execute purchase</button>`}
+      ${revoked ? "" : `<button class="mb-btn danger" id="btnRevoke">Revoke mandate</button>`}
+    `;
+    if (!revoked) {
+      $("btnExec").onclick = executePurchase;
+      $("btnRevoke").onclick = revokeMandate;
+    }
+    return;
+  }
+
+  // Hay borrador sin firmar: se puede editar el techo antes de firmar. Editar
+  // deja registro de qué cambió el humano — es la mitad del valor del formulario.
+  const d = m.form.current;
+  box.innerHTML = `
+    <span class="mb-state mb-draft">draft · unsigned</span>
+    <p style="color:var(--dim);margin:0 0 8px">The agent drafted this. Review, adjust the cap and sign.</p>
+    <label class="mb-label">Total budget (ARS)</label>
+    <input class="mb-edit" id="editBudget" type="number" value="${d.suggestedBudgetArs}">
+    <label class="mb-label">Max per purchase (ARS)</label>
+    <input class="mb-edit" id="editPer" type="number" value="${d.suggestedMaxPerPurchaseArs}">
+    <div class="mb-row" style="margin-top:8px"><span>categories</span><b>${esc((d.allowedCategories||[]).join(", "))}</b></div>
+    <button class="mb-btn primary" id="btnSign">Review & sign</button>
+  `;
+  $("btnSign").onclick = signMandate;
+}
+
+function catsOf(payload) {
+  const c = (payload.constraints || []).find(x => x.type === "checkout.allowed_categories");
+  return c ? c.allowed : [];
+}
+
+/** El panel completo: el open y cada closed, con sus dos anclas a la vista. */
+function renderMandatesPanel() {
+  const host = $("mandates");
+  const m = state.mandates;
+  if (!m || (!m.open && !m.form)) {
+    host.innerHTML = `<p class="empty">No mandate yet. When you ask for a purchase, the agent drafts an Open Checkout Mandate here; signing it and buying produces the Closed Checkout Mandates below.</p>`;
+    return;
+  }
+  const parts = [];
+
+  if (m.open) {
+    const s = m.open.payload;
+    const rev = m.open.state && m.open.state.active === false;
+    const edited = (s.review && s.review.editedFields) || [];
+    parts.push(`<section class="blk"><h3>Open Checkout Mandate — what the user allowed</h3>
+      <div class="cred">
+        <div class="cred-head">
+          <span class="mb-state ${rev ? "mb-revoked" : "mb-signed"}">${rev ? "revoked" : "signed by user"}</span>
+          <h3>${esc(m.open.mandateId.slice(0,22))}…</h3>
+          <span class="who">user key</span>
+        </div>
+        <dl class="anchor">
+          <dt>budget</dt><dd>${ars(m.open.state.budgetTotalArs)}</dd>
+          <dt>per purchase</dt><dd>${ars(m.open.state.maxPerPurchaseArs ?? 0)}</dd>
+          <dt>categories</dt><dd>${esc(catsOf(s).join(", "))}</dd>
+          <dt>policy_hash</dt><dd>${esc(s.policyHash)}</dd>
+          <dt>reviewed</dt><dd>${edited.length ? `<span class="edited-tag">user edited: ${esc(edited.join(", "))}</span>` : "accepted as proposed"}</dd>
+        </dl>
+        <div class="pills">${(m.open.disclosableClaims||[]).map(c=>`<span class="pill held">${esc(CLAIM_LABEL[c]||c)}</span>`).join("")}
+          <span style="color:var(--dim);font-size:11px;align-self:center">buyer data — hashed, revealed per purchase</span></div>
+        <div class="jwt">${esc(m.open.jwt)}</div>
+      </div></section>`);
+  }
+
+  const closed = m.closed || [];
+  if (closed.length) {
+    parts.push(`<section class="blk"><h3>Closed Checkout Mandates — the executed purchases</h3>` +
+      closed.map(c => `
+        <div class="cred">
+          <div class="cred-head">
+            <span class="mb-state mb-signed">signed by agent</span>
+            <h3>${esc(c.merchantName)}</h3>
+            <span class="who">${esc(c.checkout.checkoutId)} · ${ars(c.checkout.amount/100)}</span>
+          </div>
+          <dl class="anchor">
+            <dt>checkout_hash</dt><dd>${esc(c.closed.checkout_hash)}</dd>
+            <dt>sd_hash → open</dt><dd>${esc(c.closed.sd_hash)}</dd>
+            <dt>authorization</dt><dd>${esc(c.authorizationId.slice(0,26))}…</dd>
+          </dl>
+          <div class="pills">
+            ${c.disclosed.map(x=>`<span class="pill shown">${esc(CLAIM_LABEL[x]||x)}</span>`).join("")}
+            ${c.withheld.map(x=>`<span class="pill held">${esc(CLAIM_LABEL[x]||x)}</span>`).join("")}
+          </div>
+          <div class="jwt">${esc(c.closedJwt)}</div>
+        </div>`).join("") +
+      `<p style="color:var(--dim);font-size:12px;margin:2px 0 0">Each closed mandate binds to the merchant-signed cart (checkout_hash) and to the open it hangs from (sd_hash). The agent can't move either.</p></section>`);
+  }
+
+  const refused = m.refused || [];
+  if (refused.length) {
+    parts.push(`<section class="blk"><h3>Refused</h3>` +
+      refused.map(r => `<div class="cred cred-refused">
+        <div class="cred-head"><span class="mb-state mb-revoked">${esc(r.reason)}</span><h3>${esc(r.merchantName)}</h3></div>
+        <p style="color:var(--dim);font-size:12.5px;margin:0">${esc(r.detail)}</p></div>`).join("") +
+      `</section>`);
+  }
+
+  host.innerHTML = parts.join("");
+}
+
+function renderMandates() {
+  renderMandateBox();
+  renderMandatesPanel();
+  const n = (state.mandates && state.mandates.closed) ? state.mandates.closed.length : 0;
+  $("mandateCount").textContent = n > 0 ? String(n) : "";
+}
+
+async function postMandate(path, body) {
+  const res = await fetch(path, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "unknown error");
+  if (data.mandates) { state.mandates = data.mandates; }
+  if (data.canExecute !== undefined) state.canExecute = data.canExecute;
+  return data;
+}
+
+async function signMandate() {
+  const budget = Number($("editBudget").value);
+  const per = Number($("editPer").value);
+  const edits = {};
+  const d = state.mandates.form.current;
+  if (budget !== d.suggestedBudgetArs) edits.suggestedBudgetArs = budget;
+  if (per !== d.suggestedMaxPerPurchaseArs) edits.suggestedMaxPerPurchaseArs = per;
+  try {
+    await postMandate("/mandate/sign", { edits });
+    renderMandates();
+    bubble(`<span class="badge b-ok">Mandate signed</span><p>Your mandate is signed and on-chain. Ask me to buy and I'll execute within it.</p>`);
+  } catch (e) { alert(e.message); }
+}
+
+async function executePurchase() {
+  $("btnExec") && ($("btnExec").disabled = true);
+  try {
+    const data = await postMandate("/purchase", {});
+    renderMandates();
+    const n = data.purchase.closed.length, r = data.purchase.refused.length;
+    bubble(`<span class="badge b-ok">Purchase executed</span><p>Signed ${n} closed mandate(s)${r ? `, ${r} refused` : ""}. See the Mandates tab for the credentials.</p>`);
+  } catch (e) { alert(e.message); }
+}
+
+async function revokeMandate() {
+  try {
+    await postMandate("/mandate/revoke", {});
+    state.canExecute = false;
+    renderMandates();
+    bubble(`<span class="badge b-bad">Mandate revoked</span><p>The mandate is revoked on-chain. Any further purchase is stopped by the contract, not by me.</p>`);
+  } catch (e) { alert(e.message); }
+}
+
+/* ---------------- sending ---------------- */
+
+async function send(text) {
+  if (!text.trim()) return;
+
+  state.messages.push({ role: "user", content: text });
+  bubble(esc(text), "user");
+  const thinking = bubble("thinking…", "agent", "thinking");
+  $("send").disabled = true;
+
+  try {
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: state.messages }),
+    });
+    const data = await res.json();
+    thinking.remove();
+    if (!res.ok) throw new Error(data.error ?? "unknown error");
+
+    state.runs.push(data);
+    renderAgentTurn(data);
+    renderBehind();
+    if (data.mandates) { state.mandates = data.mandates; state.canExecute = !!data.canExecute; }
+    renderMandates();
+
+    const c = data.catalog;
+    $("meta").textContent = `catalog ${c.origin} · ${c.products} products`;
+  } catch (err) {
+    thinking.remove();
+    bubble(`<span class="badge b-bad">Error</span><p style="font-family:var(--mono);font-size:12.5px">${esc(err.message)}</p>`);
+  } finally {
+    $("send").disabled = false;
+    $("input").focus();
+  }
+}
+
+/* ---------------- event wiring ---------------- */
+
+$("send").addEventListener("click", () => { const v = $("input").value; $("input").value = ""; send(v); });
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("send").click(); }
+});
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", String(x === t)));
+  document.querySelectorAll(".panel").forEach(p =>
+    p.setAttribute("data-active", String(p.dataset.panel === t.dataset.panel)));
+}));
+
+document.querySelectorAll(".example").forEach(b => b.addEventListener("click", () => {
+  $("input").value = b.dataset.p; $("input").focus();
+}));
+
+// The options the agent offers when it asks a question back.
+$("chatLog").addEventListener("click", (e) => {
+  const btn = e.target.closest(".qopt");
+  if (btn) send(btn.dataset.a);
+});
+
+$("reset").addEventListener("click", async () => {
+  state.messages = []; state.runs = []; state.canExecute = false;
+  $("chatLog").innerHTML = "";
+  $("behind").innerHTML = '<p class="empty">Nothing has run yet.</p>';
+  try { await postMandate("/mandate/reset", {}); } catch {}
+  renderMandates();
+  bubble(`<p>Alright, starting from zero — conversation and mandate cleared. What do you need me to get you?</p>`);
+});
+
+// Estado inicial de la pestaña de mandatos: puede que ya haya uno firmado de
+// antes (el server conserva la sesión mientras vive el proceso).
+fetch("/mandates").then(r => r.json()).then(d => {
+  if (d.mandates) { state.mandates = d.mandates; renderMandates(); }
+}).catch(() => {});
+renderMandates();
+
+bubble(`<p>Hi! I'm Chk buyer, your purchasing agent.</p>
+  <p style="color:var(--dim);font-size:13.5px">I can search and compare real prices. Buying, only within the mandate you signed.</p>`);
+</script>
+</body>
+</html>

@@ -91,7 +91,7 @@ export interface NeedSpec {
 /**
  * Qué prioriza el humano cuando hay varias opciones que cumplen.
  *
- * `economica` es el default y es lo que hacía el agente siempre: el menor costo
+ * `cheapest` es el default y es lo que hacía el agente siempre: el menor costo
  * total para cubrir la necesidad.
  *
  * `premium` no ordena por precio al revés —eso sería comprar caro por comprar
@@ -100,7 +100,7 @@ export interface NeedSpec {
  * barata. Es un proxy y hay que decirlo: no tenemos datos de calidad, tenemos
  * marca y precio.
  */
-export type QualityPreference = "economica" | "equilibrada" | "premium";
+export type QualityPreference = "cheapest" | "balanced" | "premium";
 
 export interface IntentConstraints {
   qualityPreference: QualityPreference;
