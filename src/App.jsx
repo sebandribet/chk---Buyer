@@ -27,11 +27,6 @@ async function api(path, options = {}) {
 }
 
 /**
- * What the status line says for each decision the commitment gate can reach.
- * Keyed by kind rather than sniffing the reply text, so a reply reworded in
- * the agent cannot silently change what the operator is told happened.
- */
-/**
  * The rehearsed demo path, offered as a Tab completion in the composer.
  *
  * Every chat turn of the flow is here, including the answer to the agent's
@@ -73,6 +68,11 @@ function nextScriptPrompt(demo) {
   return DEMO_SCRIPT.terms;
 }
 
+/**
+ * What the status line says for each decision the commitment gate can reach.
+ * Keyed by kind rather than sniffing the reply text, so a reply reworded in
+ * the agent cannot silently change what the operator is told happened.
+ */
 const NOTICE_BY_KIND = {
   clarification: "The agent is missing a term and would not guess it.",
   suggestion: "The agent searched and compared. It authorized nothing.",
@@ -113,6 +113,24 @@ function App() {
   const isEditable = ["needs_input", "ready"].includes(draft?.status) || editingReviewedDraft;
   const hasKyc = Boolean(demo?.kyc?.captureReady);
   const scriptPrompt = nextScriptPrompt(demo);
+
+  /**
+   * The operations pane reveals one card at a time, as the flow earns it.
+   *
+   * Every card rendered from the start was a screen of empty placeholders -
+   * "awaiting a quote", "sign the mandate first", two merchant wallets at
+   * US$0.00 - and a viewer had no way to tell which of them was the live one.
+   * A card appears at the moment it has something to say: search when the
+   * mandate is signed, the merchant desk when a quote is bound to one, the
+   * trials once the honest path has been shown to work.
+   *
+   * The trials also stay up once any of them has run, so a reset back to the
+   * signed phase lands the operator straight on the next one.
+   */
+  const mandateSigned = Boolean(demo?.mandate);
+  const settled = selection?.status === "Settled";
+  const showTrials = mandateSigned
+    && (settled || (flight?.trials?.length ?? 0) > 0 || !activeMandate);
 
   useEffect(() => {
     if (!draft) return;
@@ -233,7 +251,22 @@ function App() {
     const state = await run("sign", () => api("/api/demo/mandate", { method: "POST" }));
     if (state) {
       setDemo(state);
-      setNotice(`Mandate #${state.mandate.id} is active on the mock chain. Search may now run within the signed limits.`);
+      setNotice(`Mandate #${state.mandate.id} is live on the mock chain.`);
+    }
+  }
+
+  /**
+   * Back to the signed mandate, without redoing KYC and the chat.
+   *
+   * Every trial by fire ends the mandate it runs against, so showing a second
+   * one meant restarting the whole demo. The audit trail deliberately survives.
+   */
+  async function resetToSigned() {
+    const state = await run("resign", () => api("/api/demo/reset-to-signed", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Back at the signed phase on mandate #${state.mandate.id}. The audit trail keeps every earlier rejection.`);
     }
   }
 
@@ -348,7 +381,7 @@ function App() {
             {demo && !hasKyc && (
               <section className="kyc-card login-card">
                 <div className="section-label"><ShieldCheck size={14} /> Step 1 - mock KYC and payment token</div>
-                <p>Sign in as the demo buyer to enroll a tokenized mock payment method. No card number, bank account, or real funds are used.</p>
+                <p>Enrolls a tokenized mock payment method. No card number and no real funds.</p>
                 <div className="login-row">
                   <span><strong>{buyer.name}</strong><small>{buyer.email} &middot; {buyer.company}</small></span>
                   <button className="primary-button" onClick={verifyBuyer} disabled={Boolean(busy)}>
@@ -365,7 +398,12 @@ function App() {
               </article>
             ))}
 
-            {busy === "chat" && <article className="message assistant pending"><span>chk! Buyer</span><p>Reading your request...</p></article>}
+            {busy === "chat" && (
+              <article className="message assistant pending">
+                <span>chk! Buyer</span>
+                <p className="thinking">Thinking<i /><i /><i /></p>
+              </article>
+            )}
 
             {flight?.clarification && !busy && <ClarificationCard clarification={flight.clarification} />}
 
@@ -407,48 +445,54 @@ function App() {
           </form>
           {scriptPrompt
             ? <p className="composer-tip script-tip"><kbd>Tab</kbd> fills: &ldquo;{scriptPrompt}&rdquo;</p>
-            : <p className="composer-tip">The agent may search and compare from chat alone. Booking needs a mandate you reviewed and signed.</p>}
+            : <p className="composer-tip">Chat can search and compare. Booking needs a signed mandate.</p>}
         </section>
 
         <section className="operations-pane" aria-label="Merchant and audit showcase">
           <div className="ops-heading">
-            <div><Plane size={19} /><span><strong>Flight operations</strong><small>mock web scraping + merchant verification</small></span></div>
+            <div><Plane size={19} /><span><strong>Flight operations</strong><small>scrape, verify, capture</small></span></div>
             {demo?.mandate && <span className={`mandate-status ${demo.mandate.status.toLowerCase()}`}>{demo.mandate.status}</span>}
           </div>
 
           {!demo ? <OperationsEmpty /> : <>
-            <WalletRow demo={demo} />
+            <WalletRow demo={demo} showMerchants={Boolean(selection)} />
             <AgentSuggestion suggestion={flight?.suggestion} />
-            <SearchPanel
-              flight={flight}
-              signed={isSigned}
-              active={activeMandate}
-              busy={busy}
-              onSearch={searchFlights}
-            />
-            <MerchantPanel
-              selection={selection}
-              verification={verification}
-              busy={busy}
-              onVerify={verifyMerchant}
-              onCapture={capturePayment}
-              active={activeMandate}
-            />
-            <TrialByFire
-              active={activeMandate}
-              mandate={demo.mandate}
-              selection={selection}
-              liveCap={liveCap}
-              onCapChange={setLiveCap}
-              onAmend={amendCap}
-              onOutside={outsideMandateTrial}
-              onImposter={impersonatedAgentTrial}
-              onExpired={expiredMandateTrial}
-              onRevoke={revokeMandate}
-              onRevoked={revokedMandateTrial}
-              busy={busy}
-              trial={flight?.trial}
-            />
+            {mandateSigned && (
+              <SearchPanel
+                flight={flight}
+                active={activeMandate}
+                busy={busy}
+                onSearch={searchFlights}
+              />
+            )}
+            {selection && (
+              <MerchantPanel
+                selection={selection}
+                verification={verification}
+                busy={busy}
+                onVerify={verifyMerchant}
+                onCapture={capturePayment}
+                active={activeMandate}
+              />
+            )}
+            {showTrials && (
+              <TrialByFire
+                active={activeMandate}
+                mandate={demo.mandate}
+                selection={selection}
+                liveCap={liveCap}
+                onCapChange={setLiveCap}
+                onAmend={amendCap}
+                onOutside={outsideMandateTrial}
+                onImposter={impersonatedAgentTrial}
+                onExpired={expiredMandateTrial}
+                onRevoke={revokeMandate}
+                onRevoked={revokedMandateTrial}
+                onResetSigned={resetToSigned}
+                busy={busy}
+                trial={flight?.trial}
+              />
+            )}
             {flight?.lastReport && <DecisionReport report={flight.lastReport} />}
             <AuditTrail audit={demo.audit} />
           </>}
@@ -488,7 +532,7 @@ function mandateLabel(draft) {
 }
 
 function EmptyState({ onStart, busy }) {
-  return <div className="empty-state"><Bot size={28} /><h1>Safe purchases start with a mandate.</h1><p>Run a complete human &rarr; agent &rarr; merchant &rarr; capture flow with deterministic flight quotes and a local blockchain.</p><button className="primary-button" onClick={onStart} disabled={busy}><RefreshCw size={15} /> Start local live demo</button></div>;
+  return <div className="empty-state"><Bot size={28} /><h1>Safe purchases start with a mandate.</h1><p>A full human &rarr; agent &rarr; merchant &rarr; capture flow on a local chain.</p><button className="primary-button" onClick={onStart} disabled={busy}><RefreshCw size={15} /> Start local live demo</button></div>;
 }
 
 /**
@@ -519,13 +563,12 @@ function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, 
       <form className="mandate-form" onSubmit={onSave}>
         <label className="wide">Product name / free-text flight request
           <textarea value={form.productName} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("productName", event.target.value)} placeholder="Flight from Buenos Aires to Cordoba on 2026-09-15" rows="2" />
-          <small>This is a string, not a catalog selector. The mock scraper uses it to start its search.</small>
         </label>
         <label>Budget (US$)<input value={form.budget} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("budget", event.target.value)} inputMode="decimal" placeholder="e.g. 300" />
-          <small>Total for every ticket. The per-ticket cap below is this divided by the ticket count.</small>
+          <small>Total for every ticket. The cap below divides it by the ticket count.</small>
         </label>
         <label>Seller / airline<input value={form.seller} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("seller", event.target.value)} placeholder="e.g. Any airline" />
-          <small>Exactly &ldquo;Any airline&rdquo; allows every carrier. Anything else is enforced as that one airline.</small>
+          <small>Exactly &ldquo;Any airline&rdquo; allows every carrier. Anything else is enforced as that carrier.</small>
         </label>
         <label>Units / tickets<input value={form.quantity} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("quantity", event.target.value)} inputMode="numeric" /></label>
         <label>Departure date<input type="date" value={form.departureDate} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("departureDate", event.target.value)} /></label>
@@ -540,7 +583,7 @@ function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, 
       <div className="mandate-summary">
         <span>Derived per-ticket cap</span><strong>{draft.maxUnitPrice ? `US$${money(draft.maxUnitPrice)}` : unitCapPending(draft)}</strong>
         <span>Authority valid through</span><strong>{draft.authorizationExpiresAt || "Waiting for your date"}</strong>
-        <span>Signed only after</span><strong>KYC token &rarr; review &rarr; explicit signature</strong>
+        <span>Signed only after</span><strong>KYC &rarr; review &rarr; signature</strong>
       </div>
 
       <div className="menu-actions">
@@ -553,10 +596,17 @@ function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, 
   );
 }
 
-function WalletRow({ demo }) {
-  return <section className="wallet-row">
+/**
+ * The merchant wallets only once a merchant is in the picture.
+ *
+ * Two US$0.00 cards next to the buyer from the first frame told a viewer
+ * nothing and read as part of the buyer's own balance. They earn their place
+ * when a quote is bound to one of them and the capture is about to move money.
+ */
+function WalletRow({ demo, showMerchants }) {
+  return <section className={`wallet-row ${showMerchants ? "" : "solo"}`}>
     <article className="wallet buyer"><span>Buyer</span><strong>US${money(demo.balances.buyer)}</strong><small>{demo.buyer.name}<br />{demo.kyc.captureReady ? "KYC token ready" : "KYC pending"}</small></article>
-    {demo.flight.merchants.map((merchant) => <article className="wallet merchant" key={merchant.name}><span>{merchant.name}</span><strong>US${money(merchant.balance)}</strong><small>approved mock merchant</small></article>)}
+    {showMerchants && demo.flight.merchants.map((merchant) => <article className="wallet merchant" key={merchant.name}><span>{merchant.name}</span><strong>US${money(merchant.balance)}</strong><small>approved merchant</small></article>)}
   </section>;
 }
 
@@ -602,7 +652,7 @@ function ClarificationCard({ clarification }) {
   return (
     <section className="kyc-card clarification-card">
       <div className="section-label"><AlertTriangle size={14} /> Missing terms</div>
-      <p>The agent would not guess these. Nothing was searched, signed, or charged.</p>
+      <p>Nothing was searched, signed, or charged.</p>
       <dl className="clarification-list">
         {clarification.questions.map((question) => (
           <div key={question.field || question.question}>
@@ -630,15 +680,16 @@ const COMMITMENT_LABEL = {
  */
 function AgentSuggestion({ suggestion }) {
   if (!suggestion) return null;
-  const { best, options, overBudget, rejected, trace, brief, commitment, detail } = suggestion;
+  // `detail` is deliberately not rendered here: the chat reply already opens
+  // with that exact sentence, and printing it twice was half this card.
+  const { best, options, overBudget, rejected, trace, brief, commitment } = suggestion;
 
   return (
     <section className="operations-card search-card">
       <div className="card-heading">
-        <div><Search size={16} /><span><strong>Agent comparison</strong><small>searched and compared - authorized nothing</small></span></div>
+        <div><Search size={16} /><span><strong>Agent comparison</strong><small>compared, authorized nothing</small></span></div>
         <em>{COMMITMENT_LABEL[commitment] ?? commitment}</em>
       </div>
-      <p>{detail}</p>
 
       {best && (
         <div className="selected-itinerary">
@@ -659,8 +710,8 @@ function AgentSuggestion({ suggestion }) {
         <div className="required-note">
           <AlertTriangle size={14} />
           <span>
-            You did not give {brief.reference.join(", ")}. The agent used a reference value to compare prices
-            and did not treat it as something you asked for. It cannot reach a mandate.
+            You did not give {brief.reference.join(", ")}. The agent compared on a reference value, not on
+            something you asked for. It cannot reach a mandate.
           </span>
         </div>
       )}
@@ -710,19 +761,17 @@ function AgentSuggestion({ suggestion }) {
   );
 }
 
-function SearchPanel({ flight, signed, active, busy, onSearch }) {
+function SearchPanel({ flight, active, busy, onSearch }) {
   const offers = flight?.search?.offers ?? [];
   return <section className="operations-card search-card">
-    <div className="card-heading"><div><Search size={17} /><span><strong>Agent flight search</strong><small>Mock web scraper + deterministic policy filter</small></span></div>{flight?.search?.status && <em>{flight.search.status.replaceAll("_", " ")}</em>}</div>
-    {signed && active && !flight?.selection && <button className="primary-button wide" onClick={onSearch} disabled={Boolean(busy)}><Plane size={15} /> {busy === "search" ? "Searching offers..." : "Search and authorize cheapest eligible flight"}</button>}
-    {!signed && <p>Sign the human-reviewed mandate before search can create an authorization.</p>}
+    <div className="card-heading"><div><Search size={17} /><span><strong>Agent flight search</strong><small>Scrape, then filter on the signed terms</small></span></div>{flight?.search?.status && <em>{flight.search.status.replaceAll("_", " ")}</em>}</div>
+    {active && !flight?.selection && <button className="primary-button wide" onClick={onSearch} disabled={Boolean(busy)}><Plane size={15} /> {busy === "search" ? "Searching..." : "Search and authorize the cheapest eligible flight"}</button>}
     {flight?.search?.trace?.length > 0 && <ul className="scrape-trace">{flight.search.trace.map((step) => <li key={step.source}><span>{step.status}</span>{step.detail}</li>)}</ul>}
     {offers.length > 0 && <div className="offer-list">{offers.map((offer) => <article className={`offer ${offer.eligible ? "eligible" : "rejected"}`} key={offer.quoteId}><div><strong>{offer.airline}</strong><small>{offer.merchant} · {offer.quoteId}</small></div><div><span>{offer.departureTime} - {offer.arrivalTime}</span><small>{offer.route} · {offer.stops === 0 ? "nonstop" : `${offer.stops} stop(s)`}</small></div><div className="offer-price"><strong>US${money(offer.amount)}</strong><small>US${money(offer.unitPrice)} / ticket</small></div><p>{offer.eligible ? "Eligible under signed terms" : offer.rejectionReasons.join(" ")}</p></article>)}</div>}
   </section>;
 }
 
 function MerchantPanel({ selection, verification, busy, onVerify, onCapture, active }) {
-  if (!selection) return <section className="operations-card merchant-card muted"><div className="card-heading"><div><ShieldCheck size={17} /><span><strong>Merchant verification</strong><small>VuelaYa/SkyLink independently reads the mandate before capture</small></span></div></div><p>Awaiting a mandate-bound flight quote.</p></section>;
   const settled = selection.status === "Settled";
   return <section className="operations-card merchant-card">
     <div className="card-heading"><div><ShieldCheck size={17} /><span><strong>{selection.merchant} merchant desk</strong><small>Quote {selection.orderReference} · mandate #{selection.mandateId}</small></span></div><em className={settled ? "settled" : "authorized"}>{selection.status}</em></div>
@@ -736,14 +785,53 @@ function VerificationChecks({ verification }) {
   return <div className={`verification ${verification.verified ? "passed" : "failed"}`}><strong>{verification.verified ? "Verification passed" : "Verification blocked capture"}</strong><div>{Object.entries(verification.checks).map(([name, passed]) => <span key={name} className={passed ? "pass" : "fail"}>{passed ? "✓" : "×"} {readable(name)}</span>)}</div></div>;
 }
 
-function TrialByFire({ active, mandate, selection, liveCap, onCapChange, onAmend, onOutside, onImposter, onExpired, onRevoke, onRevoked, busy, trial }) {
+/**
+ * The unsafe paths, all of them always on screen.
+ *
+ * A trial that no longer applies is greyed out rather than removed. Removing it
+ * was read as the demo breaking: the buttons a viewer had just been looking at
+ * disappeared the moment one of them worked, and nothing said why. Disabled and
+ * still there, with the reason on hover, shows the same thing honestly - this
+ * one is spent, that one needs a revoked mandate.
+ */
+function TrialByFire({ active, mandate, selection, liveCap, onCapChange, onAmend, onOutside, onImposter, onExpired, onRevoke, onRevoked, onResetSigned, busy, trial }) {
   const revoked = mandate?.status === "Revoked";
   const expired = mandate?.status === "Expired";
+  const anyBusy = Boolean(busy);
+  const needsLive = "Needs a live mandate - reset to the signed phase first.";
+  const trials = [
+    { key: "outside", idle: "Flight $150 over cap", busy: "Testing...", onClick: onOutside, enabled: active, why: needsLive },
+    { key: "imposter", idle: "Impersonated agent", busy: "Testing...", onClick: onImposter, enabled: active, why: needsLive },
+    { key: "expired", idle: "Expire the mandate", busy: "Expiring...", onClick: onExpired, enabled: active, why: needsLive },
+    { key: "revoke", idle: "Revoke the mandate", busy: "Revoking...", onClick: onRevoke, enabled: active, why: needsLive },
+    { key: "revoked", idle: "Buy after revocation", busy: "Testing...", onClick: onRevoked, enabled: revoked, why: "Revoke the mandate first." },
+  ];
+
   return <section className="operations-card trial-card">
-    <div className="card-heading"><div><AlertTriangle size={17} /><span><strong>Trial by fire</strong><small>Show judges that unsafe paths fail loudly and leave no charge behind.</small></span></div></div>
-    {active && <div className="trial-actions"><button className="danger-button" onClick={onOutside} disabled={Boolean(busy)}><Ban size={15} /> {busy === "outside" ? "Testing..." : "Try $150-over-cap flight"}</button><button className="danger-button" onClick={onImposter} disabled={Boolean(busy)}><Ban size={15} /> {busy === "imposter" ? "Testing..." : "Try impersonated agent"}</button><button className="danger-button" onClick={onExpired} disabled={Boolean(busy)}><Ban size={15} /> {busy === "expired" ? "Expiring..." : "Expire local mandate"}</button><button className="danger-button" onClick={onRevoke} disabled={Boolean(busy)}><Ban size={15} /> {busy === "revoke" ? "Revoking..." : "Revoke mandate live"}</button>{selection?.status === "Authorized" && <label className="cap-control">Live ticket cap<input value={liveCap} onChange={(event) => onCapChange(event.target.value)} disabled={Boolean(busy)} /><button className="quiet-button" type="button" onClick={onAmend} disabled={Boolean(busy)}>Apply cap</button></label>}</div>}
-    {revoked && <button className="danger-button" onClick={onRevoked} disabled={Boolean(busy)}><Ban size={15} /> {busy === "revoked" ? "Testing..." : "Try a flight after revocation"}</button>}
-    {expired && <p className="trial-result"><CheckCircle2 size={15} /> The local clock is beyond the signed validity date. Further search, authorization, and capture are blocked.</p>}
+    <div className="card-heading">
+      <div><AlertTriangle size={17} /><span><strong>Trial by fire</strong><small>Unsafe paths fail loudly and leave no charge behind</small></span></div>
+      <button className="quiet-button" type="button" onClick={onResetSigned} disabled={anyBusy}>
+        <RefreshCw size={13} className={busy === "resign" ? "spin" : ""} /> {busy === "resign" ? "Re-signing..." : "Reset to signed"}
+      </button>
+    </div>
+    <div className="trial-actions">
+      {trials.map((entry) => (
+        <button
+          key={entry.key}
+          className="danger-button"
+          onClick={entry.onClick}
+          disabled={anyBusy || !entry.enabled}
+          title={entry.enabled ? undefined : entry.why}
+        >
+          <Ban size={15} /> {busy === entry.key ? entry.busy : entry.idle}
+        </button>
+      ))}
+      <label className="cap-control">Live ticket cap
+        <input value={liveCap} onChange={(event) => onCapChange(event.target.value)} disabled={anyBusy || selection?.status !== "Authorized"} />
+        <button className="quiet-button" type="button" onClick={onAmend} disabled={anyBusy || selection?.status !== "Authorized"} title={selection?.status === "Authorized" ? undefined : "Needs an authorized, uncaptured quote."}>Apply</button>
+      </label>
+    </div>
+    {expired && <p className="trial-result"><CheckCircle2 size={15} /> The clock is past the signed validity date. Search, authorization and capture are all blocked.</p>}
     {trial && <p className="trial-result"><CheckCircle2 size={15} /> <strong>Rejected as intended:</strong> {trial.reason}</p>}
   </section>;
 }
@@ -762,6 +850,9 @@ function DecisionReport({ report }) {
  * The full trail is the point of the demo, but printing every entry pushed the
  * operations pane past a screen and buried whatever just happened. The newest
  * entry is what an operator is actually looking at.
+ *
+ * The step count is the number the room is meant to leave with, so it is set as
+ * a figure and not buried in a subtitle nobody can read from the back.
  */
 function AuditTrail({ audit }) {
   const [expanded, setExpanded] = useState(false);
@@ -772,12 +863,15 @@ function AuditTrail({ audit }) {
   return (
     <section className="operations-card audit-card">
       <div className="card-heading">
-        <div><ClipboardList size={17} /><span><strong>Auditor trail</strong><small>{entries.length} recorded step(s). Every decision, contract event, verification and capture.</small></span></div>
-        {entries.length > 1 && (
-          <button className="quiet-button" type="button" onClick={() => setExpanded((open) => !open)}>
-            {expanded ? "Latest only" : `Show all ${entries.length}`}
-          </button>
-        )}
+        <div><ClipboardList size={17} /><span><strong>Auditor trail</strong></span></div>
+        <div className="audit-count">
+          <span className="count-pill">{entries.length}<small>steps</small></span>
+          {entries.length > 1 && (
+            <button className="quiet-button" type="button" onClick={() => setExpanded((open) => !open)}>
+              {expanded ? "Latest only" : "Show all"}
+            </button>
+          )}
+        </div>
       </div>
       <ol>
         {shown.map((entry, index) => (
@@ -793,7 +887,7 @@ function AuditTrail({ audit }) {
 }
 
 function OperationsEmpty() {
-  return <div className="ops-empty"><Plane size={30} /><h2>Ready for a safe flight purchase.</h2><p>The right panel will expose the offer search, on-chain merchant verification, capture-only mock payment, and auditor record.</p></div>;
+  return <div className="ops-empty"><Plane size={30} /><h2>Ready for a safe flight purchase.</h2><p>Search, verification, capture and the auditor record appear here as the flow reaches them.</p></div>;
 }
 
 function readable(value) {

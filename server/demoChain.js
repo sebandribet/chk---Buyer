@@ -89,6 +89,20 @@ function mandateExpiryUnix(value) {
   return Math.floor(timestamp / 1000);
 }
 
+/**
+ * The chain's clock, read without ethers' cache.
+ *
+ * `provider.getBlock("latest")` memoizes for a moment, which is normally
+ * invisible and here is not: the expiry trial moves the demo clock with
+ * evm_increaseTime, and a cached block read straight afterwards reports the
+ * time from before the jump. Signing against that stale reading picks an expiry
+ * the chain then rejects as INVALID_EXPIRY.
+ */
+async function chainNow(runtime) {
+  const block = await runtime.provider.send("eth_getBlockByNumber", ["latest", false]);
+  return Number(block.timestamp);
+}
+
 function revisionFor(previous) {
   return Number(previous?.revision ?? 0) + 1;
 }
@@ -619,13 +633,36 @@ export class DemoChain {
     if (draft?.status !== "reviewed") throw new Error("Review and confirm the exact flight draft before signing it.");
     if (runtime.activeMandateId !== null) throw new Error("A flight mandate is already active.");
 
+    const expiresAt = mandateExpiryUnix(draft.authorizationExpiresAt);
+    if (expiresAt <= await chainNow(runtime)) throw new Error("Mandate validity must be in the future before it can be signed.");
+    const mandateId = await this.signOnChain(runtime, draft, expiresAt);
+
+    runtime.conversation.push({
+      role: "assistant",
+      content: `Signed - mandate #${mandateId} is live through ${draft.authorizationExpiresAt}. I am off to search the airlines and hold the best fare inside your limits. Nothing is charged until the airline checks the mandate itself.`,
+    });
+    return this.state();
+  }
+
+  /**
+   * The signature itself, shared by the first signing and the reset back to the
+   * signed phase.
+   *
+   * `expiresAt` is passed in rather than read off the draft because the demo
+   * clock can move: the expiry trial pushes the chain past the buyer's validity
+   * date, and a mandate signed after that has to carry a date the chain will
+   * still accept.
+   */
+  async signOnChain(runtime, draft, expiresAt) {
     const quantity = BigInt(draft.quantity);
     const budget = parseUsd(draft.budget, "Budget");
     const maxUnitPrice = budget / quantity;
-    const latest = await runtime.provider.getBlock("latest");
-    const expiresAt = mandateExpiryUnix(draft.authorizationExpiresAt);
-    if (expiresAt <= Number(latest.timestamp)) throw new Error("Mandate validity must be in the future before it can be signed.");
-    const terms = canonicalFlightTerms({ ...draft, maxUnitPrice: displayUsd(maxUnitPrice) });
+    const validThrough = new Date(expiresAt * 1000).toISOString().slice(0, 10);
+    const terms = canonicalFlightTerms({
+      ...draft,
+      authorizationExpiresAt: validThrough,
+      maxUnitPrice: displayUsd(maxUnitPrice),
+    });
     const productHash = ethers.id(JSON.stringify(terms));
     const tx = await runtime.vault.connect(runtime.owner).createMarketplaceMandate(
       runtime.agent.address,
@@ -653,7 +690,9 @@ export class DemoChain {
     runtime.draft = {
       ...draft,
       status: "signed",
+      authorizationExpiresAt: validThrough,
       maxUnitPrice: displayUsd(maxUnitPrice),
+      questions: [],
       signing,
       updatedAt: nowIso(),
     };
@@ -664,7 +703,55 @@ export class DemoChain {
       transactionHash: tx.hash,
       blockNumber: receipt.blockNumber.toString(),
     });
-    runtime.conversation.push({ role: "assistant", content: `Mandate #${mandateId} is live through ${draft.authorizationExpiresAt}. I can now run a mock flight search, but VuelaYa or SkyLink must verify before any mock payment is captured.` });
+    return mandateId;
+  }
+
+  /**
+   * Back to the moment the mandate was signed, without redoing the demo.
+   *
+   * Each trial by fire ends the mandate it ran against - deliberately, that is
+   * the point of them - so showing a second one used to mean restarting from
+   * KYC. This re-signs the same reviewed terms as a fresh mandate and clears
+   * everything the previous mandate produced. The audit trail is not cleared:
+   * the rejections that already happened are the record, and erasing them to
+   * make the next trial look tidy is the one thing this demo must never do.
+   */
+  async resetToSignedMandate() {
+    const runtime = await this.ensure();
+    const draft = runtime.draft;
+    if (!runtime.paymentMethodEnrolled) throw new Error("Complete mock KYC before signing a mandate.");
+    if (!draft?.signing) throw new Error("Sign a mandate once before you can reset back to the signed phase.");
+
+    if (runtime.activeMandateId !== null && await runtime.vault.isMandateActive(runtime.activeMandateId)) {
+      await (await runtime.vault.connect(runtime.owner).revokeMandate(runtime.activeMandateId)).wait();
+    }
+    runtime.activeMandateId = null;
+    runtime.archivedSignedMandate = runtime.signedMandate;
+    runtime.signedMandate = null;
+
+    // A week from the chain's own clock whenever the buyer's date has been
+    // passed - by the expiry trial, or simply by the demo being replayed after
+    // that date. The mandate is re-signed with the date it actually carries.
+    const now = await chainNow(runtime);
+    const stated = mandateExpiryUnix(draft.authorizationExpiresAt);
+    const expiresAt = stated > now ? stated : now + 7 * 24 * 60 * 60;
+
+    const mandateId = await this.signOnChain(runtime, draft, expiresAt);
+    runtime.search = { status: "not_started", offers: [], trace: [] };
+    runtime.selectedPurchase = null;
+    runtime.suggestion = null;
+    runtime.clarification = null;
+    runtime.trial = null;
+    this.audit.push({
+      type: "demo_reset_to_signed_mandate",
+      detail: `The demo was returned to the signed-mandate phase as mandate ${mandateId}. Earlier rejections stay on this trail.`,
+      transactionHash: null,
+      blockNumber: null,
+    });
+    runtime.conversation.push({
+      role: "assistant",
+      content: `Fresh start from the signed phase: mandate #${mandateId} is live through ${runtime.draft.authorizationExpiresAt} on the same terms. Nothing from the previous run carries over except the audit trail.`,
+    });
     return this.state();
   }
 

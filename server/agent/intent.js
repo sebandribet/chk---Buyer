@@ -201,25 +201,27 @@ export function parseExtraction(raw) {
 export function findGaps(extraction) {
   const gaps = [];
 
-  // The destination is the one thing no flight search can proceed without, at
-  // any commitment level. Nico's grocery catalog can be browsed with no item
-  // in mind; "what flights are there?" cannot.
+  // Route and date are what a fare IS. No flight search can proceed without
+  // them at any commitment level: "how much is a flight to Cordoba?" has no
+  // answer until we know from where and when, and the honest reply to it is the
+  // question, not a price for a route the human never named. Nico's grocery
+  // catalog can be browsed with no item in mind; a fare cannot.
   if (!extraction.trip.destination) {
     gaps.push({ field: "trip.destination", question: "Where do you want to fly to?" });
   }
-
-  // Everything below is only required in order to BUY. For "how much is a
-  // flight to Madrid?", stopping to ask for a budget and a passenger count is a
-  // worse answer than showing the fares. The search brief covers those with
-  // reference values, clearly marked as reference.
-  if (extraction.commitment !== "committed") return gaps;
-
   if (!extraction.trip.origin) {
     gaps.push({ field: "trip.origin", question: "Which city are you flying from?" });
   }
   if (!extraction.trip.departureDate) {
     gaps.push({ field: "trip.departureDate", question: "What date do you want to depart?" });
   }
+
+  // Everything below is only required in order to BUY. Once the route and date
+  // are known there is a real fare to show, and stopping to ask for a budget
+  // and a passenger count is a worse answer than showing it. The search brief
+  // covers those with reference values, clearly marked as reference.
+  if (extraction.commitment !== "committed") return gaps;
+
   if (extraction.trip.passengers === null) {
     gaps.push({ field: "trip.passengers", question: "How many passengers is this for?" });
   }
@@ -243,6 +245,8 @@ const BUDGET = /budget|presupuesto|price cap|maximum.*(spend|pay)|how much.*(spe
 // down to whichever came first.
 const ORIGIN = /\borigin\b|from which city|which city are you (?:depart|leav|fly)|depart(?:ing|ure)? from|flying from|leaving from|travell?ing from/i;
 const DESTINATION = /\bdestination\b|destino|fly(?:ing)? to|travell?ing to|going to|where .*(?:go|fly|travel)|which city .*(?:to|arrive|land)/i;
+// Tested after ORIGIN, which owns "departing from". This one owns the day.
+const DATE = /\bdate\b|\bwhen\b|\bfecha\b|what day/i;
 const REFINEMENT = /cabin|class|airline|carrier|stop|layover|seat|baggage|luggage|time of day|window|aisle|return/i;
 const MANDATE_TERMS = /authoriz|expir|valid|mandate|payment|card|kyc|wallet|merchant|supplier/i;
 
@@ -255,8 +259,9 @@ const MANDATE_TERMS = /authoriz|expir|valid|mandate|payment|card|kyc|wallet|merc
  * ask for permissions instead of using them.
  *
  * So the rule lives in code:
- *   - where to, and for whom  -> blocks. Without it there is nothing to search.
- *   - budget                  -> blocks only if money is going to be spent.
+ *   - route and date          -> always block. They are what a fare is; without
+ *     them there is nothing to search, whatever the request was for.
+ *   - passengers, budget      -> block only if money is going to be spent.
  *   - cabin, airline, stops   -> never block. They refine a request that is
  *     already answerable; letting them block turns a valid purchase into a
  *     questionnaire.
@@ -267,19 +272,24 @@ const MANDATE_TERMS = /authoriz|expir|valid|mandate|payment|card|kyc|wallet|merc
  * not guess, it simply does not ask what is not its to ask.
  */
 export function isBlockingQuestion(field, question, commitment) {
-  // Where from is only needed to buy; findGaps asks for it on the same terms.
-  if (about(ORIGIN, field, question)) return commitment === "committed";
+  // First, because it is the only rule that must survive every later pattern.
+  // "Until what date may this mandate authorize a purchase?" is a mandate term
+  // the human never has to volunteer, and it would otherwise be caught by DATE
+  // below and stop a run over a question that is not the human's to answer.
+  if (about(MANDATE_TERMS, field, question)) return false;
+
+  // The same three terms findGaps requires, on the same terms - if the rule
+  // lived on only one side, one of them could let through what the other stops.
+  if (about(ORIGIN, field, question)) return true;
   if (about(DESTINATION, field, question)) return true;
+  if (about(DATE, field, question)) return true;
 
   // In a request that will not buy, nothing else blocks. Whatever is missing is
   // resolved by the search brief with reference values, and showing fares is a
-  // better answer than a questionnaire. Same rule as findGaps: if it lived on
-  // only one side, the model could stop a run the code already decided to let
-  // through.
+  // better answer than a questionnaire.
   if (commitment !== "committed") return false;
 
   if (about(BUDGET, field, question)) return true;
-  if (about(MANDATE_TERMS, field, question)) return false;
   if (about(REFINEMENT, field, question)) return false;
   return true;
 }

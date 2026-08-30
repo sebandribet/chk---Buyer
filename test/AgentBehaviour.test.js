@@ -87,6 +87,15 @@ const FULL_TRIP = {
   passengers: 2,
 };
 
+/**
+ * The same trip with nobody counted and no cap named.
+ *
+ * Route and date are what a fare is, so they are always present in a request
+ * the agent is allowed to answer. Who is flying and what they will spend are
+ * not: those only matter once money is going to move.
+ */
+const OPEN_TRIP = { origin: "Buenos Aires", destination: "Cordoba", departure_date: "2026-09-15" };
+
 // ---------------------------------------------------------------------------
 // The commitment gate - the guarantee this whole design exists to make
 // ---------------------------------------------------------------------------
@@ -125,10 +134,10 @@ test("a signed, usable mandate plus a concrete order reaches the policy engine",
 test("a question over a signed mandate still only suggests", async () => {
   const ctx = recordingCtx();
   const decision = await runAgent({
-    message: "How much is a flight to Cordoba?",
+    message: "How much is a Buenos Aires to Cordoba flight on the 15th?",
     conversation: [],
     mandate: { id: "0", usable: true, terms: null },
-    llm: scripted(extraction({ commitment: "exploratory", trip: { destination: "Cordoba" } })),
+    llm: scripted(extraction({ commitment: "exploratory", trip: OPEN_TRIP })),
     ctx,
   });
 
@@ -173,25 +182,47 @@ test("a booking order with no budget is asked about, even when the model says it
 
 test("a question is not interrogated for a budget it does not need", () => {
   const gaps = findGaps(
-    parseExtraction(extraction({ commitment: "exploratory", trip: { destination: "Cordoba" } })),
+    parseExtraction(extraction({
+      commitment: "exploratory",
+      trip: { origin: "Buenos Aires", destination: "Cordoba", departure_date: "2026-09-15" },
+    })),
   );
+  // The route and the date are known, so there is a real fare to show. Money
+  // terms only matter to a request that is going to spend.
   assert.deepEqual(gaps, []);
 });
 
-test("no destination blocks at every commitment level - there is nothing to search", () => {
+test("route and date block at every commitment level - there is no fare without them", () => {
   for (const commitment of ["exploratory", "conditional", "committed"]) {
     const gaps = findGaps(parseExtraction(extraction({ commitment, trip: { origin: "Buenos Aires" } })));
+    for (const field of ["trip.destination", "trip.departureDate"]) {
+      assert.ok(gaps.some((gap) => gap.field === field), `expected a ${field} gap for "${commitment}"`);
+    }
+
+    const noOrigin = findGaps(parseExtraction(extraction({ commitment, trip: { destination: "Cordoba" } })));
     assert.ok(
-      gaps.some((gap) => gap.field === "trip.destination"),
-      `expected a destination gap for "${commitment}"`,
+      noOrigin.some((gap) => gap.field === "trip.origin"),
+      `expected an origin gap for "${commitment}"`,
     );
   }
+});
+
+test("passengers and budget still block only a request that will spend", () => {
+  const known = { origin: "Buenos Aires", destination: "Cordoba", departure_date: "2026-09-15" };
+  const asked = findGaps(parseExtraction(extraction({ commitment: "committed", trip: known })));
+  assert.deepEqual(asked.map((gap) => gap.field), ["trip.passengers", "constraints.budgetUsd"]);
 });
 
 test("refinements and mandate parameters never block a booking order", () => {
   assert.equal(isBlockingQuestion("trip.cabin", "Which cabin do you want?", "committed"), false);
   assert.equal(isBlockingQuestion("trip.airline", "Any preferred airline?", "committed"), false);
   assert.equal(isBlockingQuestion("constraints.authorizationExpiresAt", "Until when may I book?", "committed"), false);
+  // A mandate term worded as a date is still a mandate term. It is checked
+  // before the date rule precisely so it cannot be mistaken for the trip's own.
+  assert.equal(
+    isBlockingQuestion("constraints.authorizationExpiresAt", "Until what date may this mandate authorize a purchase?", "exploratory"),
+    false,
+  );
   // What and for whom still block.
   assert.equal(isBlockingQuestion("trip.passengers", "How many passengers?", "committed"), true);
   assert.equal(isBlockingQuestion("constraints.budgetUsd", "What is your budget?", "committed"), true);
@@ -199,13 +230,12 @@ test("refinements and mandate parameters never block a booking order", () => {
 
 test("an origin question is not mistaken for a destination question", () => {
   // "Which city are you departing from?" used to match the destination pattern
-  // on the bare words "which city". Two things broke: the question blocked an
-  // exploratory query it had no business blocking, and a genuine origin +
-  // destination pair deduped down to one, so the buyer was asked for a city and
-  // never told which one.
-  assert.equal(isBlockingQuestion("trip.origin", "From which city are you departing?", "exploratory"), false);
-  assert.equal(isBlockingQuestion("trip.origin", "From which city are you departing?", "committed"), true);
+  // on the bare words "which city", so a genuine origin + destination pair
+  // deduped down to one and the buyer was asked for a city and never told
+  // which one.
+  assert.equal(isBlockingQuestion("trip.origin", "From which city are you departing?", "exploratory"), true);
   assert.equal(isBlockingQuestion("trip.destination", "Where do you want to fly to?", "exploratory"), true);
+  assert.equal(isBlockingQuestion("trip.departure_date", "What is your desired departure date?", "exploratory"), true);
 
   const merged = mergeQuestions(
     [{ field: "trip.origin", question: "From which city are you departing?" }],
@@ -214,20 +244,23 @@ test("an origin question is not mistaken for a destination question", () => {
   assert.equal(merged.length, 2, "origin and destination are different questions");
 });
 
-test("an exploratory question is answered with fares, not a questionnaire", async () => {
+test("a route the agent already has is not turned into a questionnaire", async () => {
   const ctx = recordingCtx();
-  // The model asks for an origin. On a request that will not buy, that is not a
-  // gap: the comparison runs over every origin on the route instead.
+  // The model asks for a cabin and a budget. On a request that will not buy,
+  // neither is a gap: the comparison runs without those filters instead.
   const decision = await runAgent({
-    message: "How much is a flight to Cordoba?",
+    message: "How much is a Buenos Aires to Cordoba flight on the 15th?",
     conversation: [],
     mandate: null,
     llm: scripted(
       extraction({
         status: "clarification_needed",
         commitment: "exploratory",
-        trip: { destination: "Cordoba" },
-        questions: [{ field: "trip.origin", question: "From which city are you departing?", options: [] }],
+        trip: { origin: "Buenos Aires", destination: "Cordoba", departure_date: "2026-09-15" },
+        questions: [
+          { field: "trip.cabin", question: "Which cabin class do you prefer?", options: [] },
+          { field: "constraints.budget_usd", question: "What is your budget?", options: [] },
+        ],
       }),
     ),
     ctx,
@@ -235,6 +268,21 @@ test("an exploratory question is answered with fares, not a questionnaire", asyn
 
   assert.equal(decision.kind, "suggestion");
   assert.ok(decision.best, "it should have compared real fares");
+});
+
+test("a bare question names its gaps instead of pricing a route nobody gave", async () => {
+  const ctx = recordingCtx();
+  const decision = await runAgent({
+    message: "How much is a flight to Cordoba?",
+    conversation: [],
+    mandate: null,
+    llm: scripted(extraction({ commitment: "exploratory", trip: { destination: "Cordoba" } })),
+    ctx,
+  });
+
+  assert.equal(decision.kind, "clarification");
+  assert.deepEqual(decision.questions.map((question) => question.field), ["trip.origin", "trip.departureDate"]);
+  assert.ok(ctx.has("agent_clarification_requested"));
 });
 
 test("the same question asked twice in different words is asked once", () => {
@@ -279,7 +327,7 @@ test("a suggestion built on reference values still cannot buy", async () => {
     message: "How much is a flight to Cordoba?",
     conversation: [],
     mandate: null,
-    llm: scripted(extraction({ commitment: "exploratory", trip: { destination: "Cordoba" } })),
+    llm: scripted(extraction({ commitment: "exploratory", trip: OPEN_TRIP })),
     ctx,
   });
 
@@ -326,7 +374,7 @@ test("an instruction hidden in a seller note is logged and ignored", async () =>
     message: "How much is a flight to Cordoba?",
     conversation: [],
     mandate: null,
-    llm: scripted(extraction({ commitment: "exploratory", trip: { destination: "Cordoba" } })),
+    llm: scripted(extraction({ commitment: "exploratory", trip: OPEN_TRIP })),
     ctx,
   });
 
@@ -341,7 +389,7 @@ test("an unreachable equivalence check narrows what the agent will consider, nev
   const llm = new StubLlmClient({
     flight_intent_extraction: extraction({
       commitment: "exploratory",
-      trip: { destination: "Cordoba", cabin: "Business" },
+      trip: { ...OPEN_TRIP, cabin: "Business" },
     }),
     itinerary_equivalence: () => {
       throw new Error("model unavailable");

@@ -172,3 +172,41 @@ test("the signed free-text product query is still a real search filter", () => {
   });
   assert.equal(noMatch.offers.length, 0);
 });
+
+test("the demo can return to the signed phase so a second trial can run", async () => {
+  const chain = chainWithScriptedAgent();
+  await signedMartaMandate(chain, { expiry: futureDate(2) });
+
+  // The first trial ends the mandate it runs against, which is the point of it.
+  const expiredTrial = await chain.attemptExpiredMandate();
+  assert.equal(expiredTrial.state.mandate.status, "Expired");
+  const stepsBefore = expiredTrial.state.audit.length;
+
+  // The clock is now past the buyer's own validity date, so the reset has to
+  // re-sign with a date the chain will still accept rather than refuse.
+  const resigned = await chain.resetToSignedMandate();
+  assert.equal(resigned.mandate.status, "Active");
+  assert.notEqual(resigned.mandate.id, expiredTrial.state.mandate.id);
+  assert.equal(resigned.flight.draft.status, "signed");
+  assert.equal(resigned.flight.selection, null);
+  assert.equal(resigned.flight.search.status, "not_started");
+  assert.equal(resigned.balances.buyer, "2000.0");
+
+  // Erasing the rejections that already happened is the one thing this must
+  // never do: the trail is the evidence.
+  assert.ok(resigned.audit.length > stepsBefore);
+  assert.ok(resigned.audit.some((entry) => entry.type === "expired_mandate_purchase_rejected"));
+  assert.ok(resigned.audit.some((entry) => entry.type === "demo_reset_to_signed_mandate"));
+
+  // And the fresh mandate is a working one, not just an Active-looking record.
+  const second = await chain.attemptOutsideMandate();
+  assert.equal(second.rejected, true);
+  assert.equal(second.state.balances.buyer, "2000.0");
+});
+
+test("a mandate that was never signed cannot be reset back to a signed phase", async () => {
+  const chain = chainWithScriptedAgent();
+  await chain.reset();
+  await chain.loginAndEnrollBuyer();
+  await assert.rejects(chain.resetToSignedMandate(), /Sign a mandate once/);
+});

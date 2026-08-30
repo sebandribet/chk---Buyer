@@ -80,7 +80,13 @@ button:disabled { cursor: not-allowed; }
 .message span { display: block; margin-bottom: 5px; color: var(--quiet); font-size: 10px; font-weight: 750; letter-spacing: .055em; text-transform: uppercase; }
 .message.user span { color: var(--quiet); }
 .message p { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
-.message.pending { opacity: .7; }
+.message.pending { opacity: .8; }
+.thinking { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.thinking i { width: 4px; height: 4px; margin-top: 2px; border-radius: 50%; background: var(--muted); animation: blink 1.2s ease-in-out infinite; }
+.thinking i:first-of-type { margin-left: 4px; }
+.thinking i:nth-of-type(2) { animation-delay: .18s; }
+.thinking i:nth-of-type(3) { animation-delay: .36s; }
+@keyframes blink { 0%, 60%, 100% { opacity: .18; } 30% { opacity: 1; } }
 
 .kyc-card, .mandate-menu, .operations-card, .wallet, .ops-empty { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .kyc-card { margin: auto 0 4px; padding: 16px; }
@@ -152,6 +158,8 @@ code { color: var(--sky); font-family: "SFMono-Regular", Consolas, monospace; fo
 .mandate-status.active { color: var(--accent); border-color: var(--line-strong); background: var(--panel-soft); }
 .mandate-status.revoked { color: var(--danger); border-color: var(--danger-line); background: var(--danger-dark); }
 .wallet-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.wallet-row.solo { grid-template-columns: minmax(0, 1fr); }
+.wallet-row.solo .wallet { min-height: 0; }
 .wallet { min-height: 108px; padding: 13px; background: linear-gradient(145deg, #131313, #0a0a0a); }
 .wallet.buyer { border-color: var(--line-strong); }
 .wallet.merchant { border-color: #333333; }
@@ -198,6 +206,8 @@ code { color: var(--sky); font-family: "SFMono-Regular", Consolas, monospace; fo
 .cap-control { flex-direction: row; align-items: center; width: auto; gap: 6px; color: var(--muted); font-size: 10px; text-transform: none; letter-spacing: normal; }
 .cap-control input { width: 72px; padding: 7px; }
 .cap-control .quiet-button { padding: 7px 8px; font-size: 10px; }
+.trial-card .danger-button:disabled { color: var(--quiet); background: transparent; border-color: var(--line-soft); opacity: 1; }
+.trial-card .cap-control input:disabled, .trial-card .cap-control .quiet-button:disabled { opacity: .5; }
 .trial-result { display: flex; gap: 7px; align-items: flex-start; margin: 12px 0 0; padding: 10px; color: var(--accent); background: var(--panel-raised); border: 1px solid var(--line-strong); border-radius: 8px; font-size: 11px; line-height: 1.45; }
 .trial-result svg { flex: none; margin-top: 1px; }
 
@@ -208,6 +218,10 @@ code { color: var(--sky); font-family: "SFMono-Regular", Consolas, monospace; fo
 .report-grid strong { display: block; min-height: 28px; margin: 5px 0; color: var(--white); font-size: 11px; line-height: 1.3; }
 .settlement { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-top: 11px; padding: 10px; color: var(--muted); background: var(--panel-raised); border: 1px solid var(--line-strong); border-radius: 8px; font-size: 10px; }
 .settlement strong { color: var(--accent); font-size: 11px; }
+.audit-count { display: flex; align-self: center; align-items: center; gap: 8px; }
+.trial-card .card-heading > .quiet-button { align-self: center; }
+.count-pill { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 10px; color: var(--white); background: var(--panel-soft); border: 1px solid var(--line-strong); border-radius: 999px; font-size: 16px; font-weight: 760; letter-spacing: -.03em; }
+.count-pill small { color: var(--quiet); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .audit-card ol { display: grid; max-height: 360px; gap: 9px; margin: 0; padding: 0 4px 0 0; overflow: auto; list-style: none; }
 .audit-card li { display: grid; grid-template-columns: 1fr auto; gap: 3px 9px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
 .audit-card li:first-child { padding-top: 0; border-top: none; }

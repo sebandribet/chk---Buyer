@@ -33,6 +33,7 @@ app.get("/api/demo/merchant/verify/:purchaseId", respond((request) => demo.verif
 app.post("/api/demo/merchant/capture/:purchaseId", respond((request) => demo.capturePurchase(request.params.purchaseId)));
 app.post("/api/demo/mandate/price-cap", respond((request) => demo.amendPriceCap(request.body.maxUnitPrice)));
 app.post("/api/demo/mandate/revoke", respond(() => demo.revokeMandate()));
+app.post("/api/demo/reset-to-signed", respond(() => demo.resetToSignedMandate()));
 app.post("/api/demo/trial/outside-mandate", respond(() => demo.attemptOutsideMandate()));
 app.post("/api/demo/trial/impersonated-agent", respond(() => demo.attemptImpersonatedAgent()));
 app.post("/api/demo/trial/expired-mandate", respond(() => demo.attemptExpiredMandate()));
