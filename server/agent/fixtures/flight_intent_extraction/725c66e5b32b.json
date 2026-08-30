@@ -1,0 +1,31 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: Lets create a mandate for a flight to sao paulo",
+  "recordedAt": "2026-08-30T15:06:32.547Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "exploratory",
+    "natural_language_description": "Lets create a mandate for a flight to sao paulo",
+    "trip": {
+      "origin": null,
+      "destination": "Sao Paulo",
+      "departure_date": null,
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "origin",
+        "question": "From which city will you be departing?",
+        "options": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: Lets create a mandate for a flight to sao paulo\nHuman: From Buenos Aires, lets leave tomorrow\nHuman: Lets depart on the fifteenth of next month. Budget 1000 dollar. Valid through next week",
+  "recordedAt": "2026-08-30T15:07:28.391Z",
+  "response": {
+    "status": "ok",
+    "commitment": "committed",
+    "natural_language_description": "Lets create a mandate for a flight to sao paulo From Buenos Aires, lets leave tomorrow Lets depart on the fifteenth of next month. Budget 1000 dollar. Valid through next week",
+    "trip": {
+      "origin": "Buenos Aires",
+      "destination": "Sao Paulo",
+      "departure_date": "2026-09-15",
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": 1000,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": "2026-09-06"
+    },
+    "questions": []
+  }
+}
