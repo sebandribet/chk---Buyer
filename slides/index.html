@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chk! Buyer — The buyer who isn't human</title>
+<style>
+/* ==========================================================================
+   chk! Buyer — pitch deck
+
+   Design system taken from src/styles.css, not invented. Pure monochrome,
+   Inter with tight negative tracking, tiny uppercase labels, monospace for
+   anything a machine produced. One accent, red, and only when the system
+   rejects something.
+
+   Slides are backdrops. The presenter carries the argument; the screen holds
+   one idea and as few words as that idea survives on. If a sentence is
+   something a person would say out loud, it does not belong here.
+
+   Every image is drawn: line icons as inline SVG symbols. No CDN, no webfont
+   URL, no bitmaps. It has to run on a projector with no internet.
+   ========================================================================== */
+
+:root {
+  --canvas: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #101010;
+  --raised: #151515;
+  --border: #1f1f1f;
+  --border-2: #2a2a2a;
+  --border-3: #3a3a3a;
+  --ink: #f2f2f2;
+  --muted: #a3a3a3;
+  --quiet: #777777;
+  --dim: #4a4a4a;
+  --reject: #ff4d4d;
+  --reject-dim: #a82c2c;
+
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 1280px; height: 720px;
+  transform: translate(-50%, -50%) scale(var(--scale, 1));
+  transform-origin: center center;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px 84px;
+}
+
+.slide.is-active { display: flex; }
+.head, .body, .foot { position: relative; z-index: 1; }
+
+/* --------------------------------------------------------------------------
+   Backgrounds — four treatments, each meaning something
+   -------------------------------------------------------------------------- */
+
+.slide::before, .slide::after { content: ""; position: absolute; z-index: 0; pointer-events: none; }
+.slide::before { inset: 0; }
+
+.slide[data-bg="glow"]::before { background: radial-gradient(760px 520px at 20% 34%, #17171b 0%, rgba(0,0,0,0) 64%); }
+.slide[data-bg="path"]::before { background: radial-gradient(900px 600px at 76% 24%, #131317 0%, rgba(0,0,0,0) 62%); }
+.slide[data-bg="path"]::after {
+  width: 2200px; height: 2200px; left: -420px; bottom: -1580px;
+  border-radius: 50%; border-top: 1px solid #171717;
+}
+.slide[data-bg="grid"]::before {
+  background-image: radial-gradient(circle, #1b1b1b 1px, rgba(0,0,0,0) 1px);
+  background-size: 38px 38px;
+  -webkit-mask-image: radial-gradient(780px 470px at 46% 50%, #000 0%, rgba(0,0,0,0) 78%);
+  mask-image: radial-gradient(780px 470px at 46% 50%, #000 0%, rgba(0,0,0,0) 78%);
+}
+.slide[data-bg="alert"]::before { background: radial-gradient(820px 560px at 86% 62%, rgba(255,77,77,.07) 0%, rgba(0,0,0,0) 62%); }
+
+/* --------------------------------------------------------------------------
+   Type
+   -------------------------------------------------------------------------- */
+
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--quiet); }
+
+h1 { font-size: 92px; font-weight: 760; letter-spacing: -.052em; line-height: .92; }
+h2 { font-size: 52px; font-weight: 730; letter-spacing: -.04em; line-height: 1.02; max-width: 19ch; text-wrap: balance; }
+
+.note { font-size: 15px; line-height: 1.5; color: var(--quiet); max-width: 72ch; }
+.note strong { color: var(--muted); font-weight: 600; }
+
+/* The line that lands the slide. Big enough to read from the back of a room —
+   anything smaller than this is something the presenter says, not shows. */
+.punch { font-size: 24px; font-weight: 620; letter-spacing: -.028em; line-height: 1.3; color: var(--muted); max-width: 40ch; }
+.punch strong { color: var(--ink); font-weight: 680; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.head { display: flex; flex-direction: column; gap: 13px; }
+.body { margin-top: 38px; }
+.foot { margin-top: 28px; }
+
+/* --------------------------------------------------------------------------
+   Line icons — drawn, never fetched
+   -------------------------------------------------------------------------- */
+
+.ico { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.ico.lg { width: 34px; height: 34px; }
+
+.cats { display: flex; gap: 12px; }
+.cat {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  min-width: 116px; padding: 18px 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  color: var(--dim); background: var(--surface);
+  transition: color .4s ease, border-color .4s ease, background .4s ease;
+}
+.cat span { font-size: 11px; font-weight: 650; letter-spacing: -.01em; }
+.cat.on { color: var(--ink); border-color: var(--border-3); background: linear-gradient(150deg, #17171a, #0b0b0d); }
+.cat.no { color: var(--reject); border-color: var(--reject-dim); }
+
+/* --------------------------------------------------------------------------
+   Budget bar and purchases
+   -------------------------------------------------------------------------- */
+
+.budget { display: flex; flex-direction: column; gap: 10px; }
+.budget .rail { height: 10px; border: 1px solid var(--border-2); border-radius: 99px; overflow: hidden; background: #060606; }
+.budget .fill { height: 100%; width: 0; background: var(--ink); border-radius: 99px; transition: width .7s cubic-bezier(.3,.7,.4,1); }
+.budget .readout { display: flex; justify-content: space-between; align-items: baseline; }
+.budget .readout b { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: -.04em; }
+.budget .readout span { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
+
+.buys { display: flex; flex-direction: column; gap: 8px; }
+.buy {
+  display: grid; grid-template-columns: 34px 1fr auto; gap: 16px; align-items: center;
+  padding: 13px 18px; border: 1px solid var(--border-2); border-radius: 11px; background: var(--surface);
+  color: var(--muted);
+  opacity: 0; transform: translateY(10px);
+  transition: opacity .4s ease, transform .4s ease;
+}
+.buy.in { opacity: 1; transform: none; }
+.buy .what { font-size: 15px; color: var(--ink); font-weight: 600; letter-spacing: -.015em; }
+.buy .amt { font-family: var(--mono); font-size: 17px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); }
+
+/* --------------------------------------------------------------------------
+   Diagrams
+   -------------------------------------------------------------------------- */
+
+svg.dia { display: block; width: 100%; height: auto; overflow: visible; }
+
+.dia .box { fill: var(--surface); stroke: var(--border-2); stroke-width: 1; }
+.dia .box.key { fill: url(#lift); stroke: var(--border-3); }
+.dia .bar { fill: #060606; stroke: var(--border-2); stroke-width: 1; }
+
+.dia .t { fill: var(--ink); font-family: var(--sans); font-size: 16px; font-weight: 660; letter-spacing: -.02em; }
+.dia .s { fill: var(--quiet); font-family: var(--sans); font-size: 12px; }
+.dia .lbl { fill: var(--quiet); font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.dia .m { fill: var(--muted); font-family: var(--mono); font-size: 12.5px; }
+
+.dia .link { stroke: var(--border-3); stroke-width: 1; fill: none; }
+.dia .link.strong { stroke: var(--muted); }
+.dia .tip { fill: var(--border-3); }
+.dia .tip.strong { fill: var(--muted); }
+
+.dia [data-draw] { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.slide.is-active .dia [data-draw] { animation: draw .55s ease forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.dia [data-pop] { opacity: 0; }
+.slide.is-active .dia [data-pop] { animation: pop .3s ease forwards; }
+@keyframes pop { to { opacity: 1; } }
+
+/* --------------------------------------------------------------------------
+   Components
+   -------------------------------------------------------------------------- */
+
+.cols { display: grid; gap: 20px; }
+.c2 { grid-template-columns: 1fr 1fr; }
+
+.panel { padding: 24px; border: 1px solid var(--border-2); border-radius: 12px; background: var(--surface); }
+.panel .ico { color: var(--quiet); margin-bottom: 14px; }
+.panel p { font-size: 20px; font-weight: 640; letter-spacing: -.025em; line-height: 1.25; color: var(--ink); }
+.panel .sub { display: block; margin-top: 8px; font-size: 13px; font-weight: 400; color: var(--quiet); letter-spacing: 0; }
+.panel.bad .ico, .panel.bad > p { color: var(--reject); }
+.panel.bad .sub { color: var(--quiet); }
+
+.checks { display: flex; flex-direction: column; gap: 9px; }
+.check { display: grid; grid-template-columns: 16px 1fr; gap: 11px; align-items: baseline; font-family: var(--mono); font-size: 14px; color: var(--muted); }
+.check i { font-style: normal; color: var(--ink); }
+.check.no, .check.no i { color: var(--reject); }
+.check.no b { font-weight: 700; }
+
+.attacks { border-top: 1px solid var(--border); }
+.attack { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--border); }
+.attack span { font-size: 14.5px; color: var(--muted); }
+.attack code { font-family: var(--mono); font-size: 11.5px; color: var(--reject); }
+
+.vault { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.cell {
+  display: flex; flex-direction: column; gap: 8px; justify-content: space-between;
+  min-height: 138px; padding: 15px;
+  border: 1px solid var(--border-2); border-radius: 11px; background: var(--surface);
+  transition: border-color .35s ease, background .35s ease;
+}
+.cell .h { font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all; line-height: 1.35; }
+.cell .v { font-size: 14px; font-weight: 640; letter-spacing: -.02em; opacity: 0; transition: opacity .35s ease; }
+.cell .k { font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); transition: color .35s ease; }
+.cell.open { border-color: var(--border-3); background: var(--surface-2); }
+.cell.open .v { opacity: 1; }
+.cell.open .k { color: var(--quiet); }
+.cell.shut .k { color: var(--reject-dim); }
+
+.flow { display: grid; grid-template-columns: 1fr 82px 1fr 82px 1fr; align-items: center; gap: 10px; padding: 26px 20px; border: 1px solid var(--border-2); border-radius: 12px; background: rgba(6,6,6,.86); }
+.node { display: flex; flex-direction: column; gap: 7px; min-height: 130px; justify-content: center; padding: 20px; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface-2); transition: border-color .3s ease, background .3s ease; }
+.node span { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
+.node strong { font-family: var(--mono); font-size: 30px; font-weight: 700; letter-spacing: -.05em; }
+.node small { font-size: 11.5px; color: var(--quiet); }
+.node.held { border-color: var(--border-3); background: var(--raised); }
+
+.arrow { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.arrow .track { position: relative; width: 100%; height: 1px; background: var(--border-2); }
+.arrow .track::after { content: ""; position: absolute; inset: 0; background: var(--ink); transform: scaleX(0); transform-origin: left center; transition: transform .5s ease, background .3s ease; }
+.arrow.on .track::after { transform: scaleX(1); }
+.arrow.back .track::after { transform-origin: right center; background: var(--reject); }
+.arrow label { font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); transition: color .3s ease; }
+.arrow.on label { color: var(--quiet); }
+.arrow.back label { color: var(--reject); }
+
+.decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.decision { padding: 16px 18px; border: 1px solid var(--border-2); border-radius: 11px; background: rgba(10,10,10,.86); }
+.decision .eyebrow { margin-bottom: 8px; }
+.decision h4 { font-size: 15px; font-weight: 680; letter-spacing: -.02em; margin-bottom: 6px; }
+.decision .alt { font-size: 12px; color: var(--quiet); }
+.decision .alt s { color: var(--dim); }
+
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.ledger li { list-style: none; font-size: 16px; color: var(--muted); display: flex; gap: 12px; }
+.ledger li i { font-style: normal; font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.ledger.no li { color: var(--quiet); }
+.ledger.no li i { color: var(--reject-dim); }
+
+.title-slide { justify-content: center; }
+/* The name is the hero of the title slide. The weight contrast between "chk!"
+   and "Buyer" is the app's own brandmark — at this size it does the work a
+   logo would, without needing one. */
+.brandmark { font-size: 86px; font-weight: 780; letter-spacing: -.055em; line-height: .95; }
+.brandmark span { font-weight: 420; color: var(--muted); }
+
+/* With the name that large, the hook becomes the second voice, not a rival. */
+.title-slide h1 { font-size: 46px; font-weight: 640; letter-spacing: -.032em; line-height: 1.1; color: var(--muted); }
+.title-slide .head { gap: 26px; }
+.byline { display: flex; gap: 30px; font-size: 13px; color: var(--quiet); }
+
+/* What the merchant asks — three plain questions, not three abstractions */
+.asks { display: flex; flex-direction: column; gap: 16px; }
+.ask { display: grid; grid-template-columns: 46px 1fr; gap: 20px; align-items: baseline; }
+.ask .n { font-family: var(--mono); font-size: 13px; color: var(--dim); }
+.ask .q { font-size: 30px; font-weight: 660; letter-spacing: -.032em; line-height: 1.15; color: var(--ink); }
+.ask .how { margin-top: 7px; font-size: 14px; color: var(--quiet); }
+
+/* The three doors — the deck opens on two of them and closes on the third */
+.doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.door {
+  display: flex; flex-direction: column; gap: 16px;
+  min-height: 224px;
+  padding: 30px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--dim);
+  transition: color .5s ease, border-color .5s ease, background .5s ease;
+}
+.door p { font-size: 23px; font-weight: 660; letter-spacing: -.03em; }
+.door span { font-size: 14.5px; line-height: 1.45; color: var(--quiet); }
+.door.on {
+  color: var(--ink); border-color: var(--border-3);
+  background: linear-gradient(150deg, #17171a, #0b0b0d);
+}
+.door.on span { color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   Chrome
+   -------------------------------------------------------------------------- */
+
+#progress { position: fixed; top: 0; left: 0; height: 1px; background: var(--ink); transition: width .3s ease; z-index: 50; }
+#counter { position: fixed; bottom: 20px; right: 24px; font-family: var(--mono); font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; z-index: 50; }
+#hint { position: fixed; bottom: 20px; left: 24px; font-size: 11px; color: var(--dim); z-index: 50; transition: opacity .5s ease; }
+#hint kbd { font-family: var(--mono); color: var(--quiet); }
+#hint.gone { opacity: 0; }
+
+#overview { position: fixed; inset: 0; z-index: 100; display: none; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 28px; overflow-y: auto; background: rgba(0,0,0,.97); }
+#overview.open { display: grid; }
+.thumb { aspect-ratio: 16/9; display: flex; flex-direction: column; justify-content: space-between; padding: 12px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface); cursor: pointer; transition: border-color .18s ease; }
+.thumb:hover, .thumb:focus-visible { border-color: var(--border-3); outline: none; }
+.thumb .n { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.thumb .t { font-size: 12.5px; font-weight: 620; letter-spacing: -.02em; line-height: 1.25; text-align: left; color: var(--ink); }
+.thumb.current { border-color: var(--ink); }
+
+/* --------------------------------------------------------------------------
+   Entrance
+   -------------------------------------------------------------------------- */
+
+.slide[data-anim] .head,
+.slide[data-anim] .body > *,
+.slide[data-anim] .foot,
+.slide[data-anim] .stagger > * { opacity: 0; transform: translateY(10px); }
+
+.slide.is-active .head,
+.slide.is-active .body > *,
+.slide.is-active .foot,
+.slide.is-active .stagger > * { animation: rise .45s cubic-bezier(.22,.61,.36,1) forwards; }
+
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+.slide.is-active .head { animation-delay: 0ms; }
+.slide.is-active .body > *:nth-child(1) { animation-delay: 100ms; }
+.slide.is-active .body > *:nth-child(2) { animation-delay: 170ms; }
+.slide.is-active .foot { animation-delay: 260ms; }
+.slide.is-active .stagger > *:nth-child(1) { animation-delay: 130ms; }
+.slide.is-active .stagger > *:nth-child(2) { animation-delay: 210ms; }
+.slide.is-active .stagger > *:nth-child(3) { animation-delay: 280ms; }
+.slide.is-active .stagger > *:nth-child(4) { animation-delay: 350ms; }
+
+.reveal > * { opacity: 0; }
+.slide.is-active .reveal > * { animation: pop .22s ease forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  .slide[data-anim] .head, .slide[data-anim] .body > *, .slide[data-anim] .foot,
+  .slide[data-anim] .stagger > *, .reveal > *, .dia [data-pop] { opacity: 1; transform: none; }
+  .dia [data-draw] { stroke-dashoffset: 0; }
+  .buy { opacity: 1; transform: none; }
+}
+
+@media print {
+  html, body { overflow: visible; height: auto; }
+  #stage { position: static; width: auto; height: auto; transform: none; overflow: visible; }
+  .slide { display: flex !important; page-break-after: always; height: 100vh; }
+  #progress, #counter, #hint, #overview { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Drawn icons. Every image in this deck is one of these. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-flight" viewBox="0 0 24 24"><path d="M3 13l18-8-6 17-3.2-7.4L3 13z"/></symbol>
+    <symbol id="i-stay" viewBox="0 0 24 24"><path d="M3 19v-9m0 5h18v4M3 14v-3h8v3m2 0v-3h6a2 2 0 012 2v1"/><circle cx="6.5" cy="8.5" r="1.6"/></symbol>
+    <symbol id="i-supplies" viewBox="0 0 24 24"><path d="M3 8l9-4 9 4v8l-9 4-9-4V8z"/><path d="M3 8l9 4 9-4M12 12v8"/></symbol>
+    <symbol id="i-food" viewBox="0 0 24 24"><path d="M5 8h11v7a4 4 0 01-4 4H9a4 4 0 01-4-4V8zM16 10h2a2 2 0 010 4h-2M7 2v3M10.5 2v3M14 2v3"/></symbol>
+    <symbol id="i-tech" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/></symbol>
+    <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+  </defs>
+</svg>
+
+<div id="progress"></div>
+<div id="hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move &nbsp;·&nbsp; <kbd>F</kbd> fullscreen &nbsp;·&nbsp; <kbd>O</kbd> overview</div>
+<div id="counter"></div>
+
+<main id="stage">
+
+<!-- 01 ------------------------------------------------------------------ -->
+<section class="slide title-slide" data-anim data-bg="glow" data-title="chk! Buyer">
+  <div class="head">
+    <p class="brandmark">chk! <span>Buyer</span></p>
+    <h1>The buyer<br>isn't human.</h1>
+  </div>
+  <div class="body">
+    <p class="note" style="font-size:20px;color:var(--muted)">Let merchants charge an agent — and prove a person allowed it.</p>
+  </div>
+  <div class="foot">
+    <div class="byline"><span>NextWave 2026</span><span>Challenge 1 · Yuno</span></div>
+  </div>
+</section>
+
+<!-- 02 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="glow" data-title="The problem">
+  <div class="head">
+    <p class="eyebrow">The problem</p>
+    <h2>Two doors. Both bad.</h2>
+  </div>
+  <div class="body">
+    <div class="cols c2 stagger">
+      <div class="panel">
+        <svg class="ico lg"><use href="#i-block"/></svg>
+        <p>Block the bot<span class="sub">The sale walks away. The customer was real.</span></p>
+      </div>
+      <div class="panel bad">
+        <svg class="ico lg"><use href="#i-open"/></svg>
+        <p>Wave it through<span class="sub">The chargeback lands a month later.</span></p>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <p class="punch">The mandate is the missing door.</p>
+  </div>
+</section>
+
+<!-- 03 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="What the buyer allows">
+  <div class="head">
+    <p class="eyebrow">Open mandate · signed by the buyer</p>
+    <h2>What I allow.</h2>
+  </div>
+  <div class="body">
+    <div class="cats">
+      <div class="cat" data-on="1"><svg class="ico lg"><use href="#i-flight"/></svg><span>Travel</span></div>
+      <div class="cat" data-on="1"><svg class="ico lg"><use href="#i-stay"/></svg><span>Lodging</span></div>
+      <div class="cat" data-on="1"><svg class="ico lg"><use href="#i-supplies"/></svg><span>Supplies</span></div>
+      <div class="cat" data-on="1"><svg class="ico lg"><use href="#i-food"/></svg><span>Food</span></div>
+      <div class="cat"><svg class="ico lg"><use href="#i-tech"/></svg><span>Hardware</span></div>
+    </div>
+    <div class="cols c2" style="margin-top:26px">
+      <div class="panel"><p style="font-family:var(--mono);font-size:36px;letter-spacing:-.05em">$200<span class="sub">per purchase</span></p></div>
+      <div class="panel"><p style="font-family:var(--mono);font-size:36px;letter-spacing:-.05em">$1,200<span class="sub">in total, until Sep 30</span></p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="① The buyer signs">
+  <div class="head">
+    <p class="eyebrow">Step one</p>
+    <h2>The agent drafts.<br>The buyer signs.</h2>
+  </div>
+  <div class="body">
+    <div class="cols c2">
+      <div class="panel" style="border-color:var(--border-3)">
+        <p class="eyebrow" style="margin-bottom:14px">Per purchase</p>
+        <p style="font-family:var(--mono);font-size:46px;letter-spacing:-.055em">
+          <span id="was" style="opacity:0;color:var(--dim);text-decoration:line-through;font-size:26px;margin-right:14px">$400</span><span id="val">$400</span>
+          <span class="sub" id="tag" style="opacity:0;color:var(--ink)">Changed by the buyer, before signing</span>
+        </p>
+      </div>
+      <div class="panel">
+        <p class="eyebrow" style="margin-bottom:14px">On the record</p>
+        <p style="font-size:17px;font-weight:520;letter-spacing:-.012em;color:var(--muted)">What the agent proposed, and what the buyer changed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="② The agent buys">
+  <div class="head">
+    <p class="eyebrow">Step two</p>
+    <h2>It buys. Inside the limits.</h2>
+  </div>
+  <div class="body">
+    <div class="buys" id="buys">
+      <div class="buy"><svg class="ico"><use href="#i-flight"/></svg><span class="what">Flight</span><span class="amt">$130</span></div>
+      <div class="buy"><svg class="ico"><use href="#i-stay"/></svg><span class="what">Two nights</span><span class="amt">$95</span></div>
+      <div class="buy"><svg class="ico"><use href="#i-supplies"/></svg><span class="what">Restock</span><span class="amt">$48</span></div>
+    </div>
+    <div class="budget" style="margin-top:26px">
+      <div class="rail"><div class="fill" id="fill"></div></div>
+      <div class="readout"><b id="spent">$0</b><span><span id="left">$1,200</span> left</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="③ Both halves arrive">
+  <div class="head">
+    <p class="eyebrow">Step three</p>
+    <h2>Both halves arrive.</h2>
+  </div>
+  <div class="body">
+    <svg class="dia" viewBox="0 0 1100 236" role="img" aria-label="The open and closed mandates arrive at the merchant, which verifies them against the contract.">
+      <defs><linearGradient id="lift" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16161a"/><stop offset=".62" stop-color="#0a0a0c"/></linearGradient></defs>
+
+      <rect class="box key" x="1" y="8" width="286" height="88" rx="11" data-pop style="animation-delay:100ms"/>
+      <text class="lbl" x="24" y="40" data-pop style="animation-delay:140ms">Open · by the buyer</text>
+      <text class="t" x="24" y="72" data-pop style="animation-delay:140ms">What I allow</text>
+
+      <rect class="box" x="1" y="128" width="286" height="88" rx="11" data-pop style="animation-delay:180ms"/>
+      <text class="lbl" x="24" y="160" data-pop style="animation-delay:220ms">Closed · by the agent</text>
+      <text class="t" x="24" y="192" data-pop style="animation-delay:220ms">What I did</text>
+
+      <path class="link strong" d="M287 52 H396 V100 H466" pathLength="1" data-draw style="animation-delay:420ms"/>
+      <path class="link strong" d="M287 172 H396 V124 H466" pathLength="1" data-draw style="animation-delay:420ms"/>
+      <polygon class="tip strong" points="466,107 478,112 466,117" data-pop style="animation-delay:960ms"/>
+
+      <rect class="box" x="478" y="42" width="290" height="140" rx="11" data-pop style="animation-delay:1000ms"/>
+      <text class="lbl" x="502" y="74" data-pop style="animation-delay:1040ms">Merchant</text>
+      <text class="t" x="502" y="108" data-pop style="animation-delay:1040ms">Does it fit?</text>
+      <text class="m" x="502" y="146" data-pop style="animation-delay:1120ms">20 checks · fail-closed</text>
+
+      <path class="link" d="M768 112 H856" pathLength="1" data-draw style="animation-delay:1220ms"/>
+      <rect class="box" x="856" y="70" width="243" height="84" rx="11" data-pop style="animation-delay:1300ms"/>
+      <text class="lbl" x="878" y="102" data-pop style="animation-delay:1340ms">Contract</text>
+      <text class="s" x="878" y="126" data-pop style="animation-delay:1340ms">still live? still funded?</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 07 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="grid" data-title="What the merchant asks">
+  <div class="head">
+    <p class="eyebrow">The heart of it</p>
+    <h2>Three questions. All three, or no sale.</h2>
+  </div>
+  <div class="body">
+    <div class="asks stagger">
+      <div class="ask">
+        <span class="n">01</span>
+        <div>
+          <p class="q">&ldquo;Did the buyer really sign this?&rdquo;</p>
+        </div>
+      </div>
+      <div class="ask">
+        <span class="n">02</span>
+        <div>
+          <p class="q">&ldquo;Is this the mandate they signed?&rdquo;</p>
+        </div>
+      </div>
+      <div class="ask">
+        <span class="n">03</span>
+        <div>
+          <p class="q">&ldquo;Does the purchase fit what they allowed?&rdquo;</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="④ No receipt, no charge">
+  <div class="head">
+    <p class="eyebrow">Step four · payment</p>
+    <h2>No receipt, no charge.</h2>
+  </div>
+  <div class="body">
+    <svg class="dia" viewBox="0 0 1100 200" role="img" aria-label="The merchant's signed receipt is required before Stripe holds and captures.">
+      <rect class="box" x="1" y="30" width="256" height="98" rx="11" data-pop style="animation-delay:100ms"/>
+      <text class="lbl" x="24" y="62" data-pop style="animation-delay:140ms">Merchant accepted</text>
+      <text class="t" x="24" y="94" data-pop style="animation-delay:140ms">Signed receipt</text>
+
+      <path class="link strong" d="M257 80 H316" pathLength="1" data-draw style="animation-delay:360ms"/>
+      <polygon class="tip strong" points="316,75 326,80 316,85" data-pop style="animation-delay:840ms"/>
+
+      <rect class="box key" x="326" y="30" width="256" height="98" rx="11" data-pop style="animation-delay:420ms"/>
+      <text class="lbl" x="349" y="62" data-pop style="animation-delay:460ms">Stripe · hold</text>
+      <text class="t" x="349" y="94" data-pop style="animation-delay:460ms">Committed, not moved</text>
+
+      <path class="link strong" d="M582 80 H641" pathLength="1" data-draw style="animation-delay:660ms"/>
+      <polygon class="tip strong" points="641,75 651,80 641,85" data-pop style="animation-delay:1140ms"/>
+
+      <rect class="box" x="651" y="30" width="256" height="98" rx="11" data-pop style="animation-delay:720ms"/>
+      <text class="lbl" x="674" y="62" data-pop style="animation-delay:760ms">Stripe · capture</text>
+      <text class="t" x="674" y="94" data-pop style="animation-delay:760ms">Charged</text>
+
+      <path class="link" d="M907 80 H1010" pathLength="1" data-draw style="animation-delay:960ms"/>
+      <text class="m" x="1022" y="85" data-pop style="animation-delay:1400ms">merchant</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 09 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="grid" data-title="Architecture">
+  <div class="head">
+    <p class="eyebrow">Architecture</p>
+    <h2>Who can do what.</h2>
+  </div>
+  <div class="body">
+    <svg class="dia" viewBox="0 0 1120 320" role="img" aria-label="Buyer signs, agent proposes, policy engine reserves, merchant verifies, payment delegate captures — over a shared smart contract.">
+      <g data-pop style="animation-delay:100ms"><rect class="box" x="1" y="14" width="184" height="88" rx="11"/><text class="t" x="20" y="46">Buyer</text><text class="s" x="20" y="70">signs</text><text class="s" x="20" y="90" fill="#a82c2c">the only authority</text></g>
+      <g data-pop style="animation-delay:160ms"><rect class="box" x="235" y="14" width="184" height="88" rx="11"/><text class="t" x="254" y="46">Agent</text><text class="s" x="254" y="70">proposes</text><text class="s" x="254" y="90" fill="#a82c2c">can't sign or spend</text></g>
+      <g data-pop style="animation-delay:220ms"><rect class="box key" x="469" y="14" width="184" height="88" rx="11"/><text class="t" x="488" y="46">Policy engine</text><text class="s" x="488" y="70">reserves</text><text class="s" x="488" y="90" fill="#a82c2c">no free text</text></g>
+      <g data-pop style="animation-delay:280ms"><rect class="box key" x="703" y="14" width="184" height="88" rx="11"/><text class="t" x="722" y="46">Merchant</text><text class="s" x="722" y="70">verifies</text><text class="s" x="722" y="90" fill="#a82c2c">no shared code</text></g>
+      <g data-pop style="animation-delay:340ms"><rect class="box" x="937" y="14" width="182" height="88" rx="11"/><text class="t" x="956" y="46">Payment</text><text class="s" x="956" y="70">holds, captures</text><text class="s" x="956" y="90" fill="#a82c2c">only it moves money</text></g>
+
+      <path class="link strong" d="M185 58 H225" pathLength="1" data-draw style="animation-delay:420ms"/>
+      <polygon class="tip strong" points="225,53 235,58 225,63" data-pop style="animation-delay:900ms"/>
+      <path class="link strong" d="M419 58 H459" pathLength="1" data-draw style="animation-delay:480ms"/>
+      <polygon class="tip strong" points="459,53 469,58 459,63" data-pop style="animation-delay:960ms"/>
+      <path class="link strong" d="M653 58 H693" pathLength="1" data-draw style="animation-delay:540ms"/>
+      <polygon class="tip strong" points="693,53 703,58 693,63" data-pop style="animation-delay:1020ms"/>
+      <path class="link strong" d="M887 58 H927" pathLength="1" data-draw style="animation-delay:600ms"/>
+      <polygon class="tip strong" points="927,53 937,58 927,63" data-pop style="animation-delay:1080ms"/>
+
+      <path class="link" d="M561 102 V190" pathLength="1" data-draw style="animation-delay:1140ms"/>
+      <path class="link" d="M795 102 V190" pathLength="1" data-draw style="animation-delay:1180ms"/>
+      <path class="link" d="M1028 102 V190" pathLength="1" data-draw style="animation-delay:1220ms"/>
+      <text class="lbl" x="572" y="152" data-pop style="animation-delay:1500ms">reserves</text>
+      <text class="lbl" x="806" y="152" data-pop style="animation-delay:1540ms">verifies</text>
+      <text class="lbl" x="1039" y="152" data-pop style="animation-delay:1580ms">captures</text>
+
+      <rect class="bar" x="1" y="190" width="1118" height="98" rx="12" data-pop style="animation-delay:1280ms"/>
+      <text class="t" x="26" y="228" data-pop style="animation-delay:1340ms">Smart contract — the shared state</text>
+      <text class="s" x="26" y="256" data-pop style="animation-delay:1380ms">live revocation · spent and reserved · one-time authorizations</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 11 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="grid" data-title="Selective disclosure">
+  <div class="head">
+    <p class="eyebrow">Privacy</p>
+    <h2>Only what the sale needs.</h2>
+  </div>
+  <div class="body">
+    <div class="vault">
+      <div class="cell" data-open="1"><p class="h">4f2a·d81c<br>·9be0·77</p><div><p class="v">Legal name</p><p class="k">shown</p></div></div>
+      <div class="cell" data-open="1"><p class="h">a7c1·03fe<br>·2d44·b9</p><div><p class="v">Tax ID</p><p class="k">shown</p></div></div>
+      <div class="cell" data-open="1"><p class="h">e011·5caa<br>·8f37·1d</p><div><p class="v">Address</p><p class="k">shown</p></div></div>
+      <div class="cell" data-open="1"><p class="h">bb92·47d0<br>·6e1a·f5</p><div><p class="v">Phone</p><p class="k">shown</p></div></div>
+      <div class="cell shut"><p class="h">1c8d·9a25<br>·b703·4e</p><div><p class="v">—</p><p class="k">never</p></div></div>
+      <div class="cell shut"><p class="h">77fe·2b19<br>·c05d·8a</p><div><p class="v">—</p><p class="k">never</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="alert" data-title="Nine attacks">
+  <div class="head">
+    <p class="eyebrow">Bonus · adversarial agent</p>
+    <h2>Nine lies. Nine rejections.</h2>
+  </div>
+  <div class="body">
+    <div class="attacks reveal" data-cascade="75">
+      <div class="attack"><span>Signs the cart itself</span><code>checkout_signature_invalid</code></div>
+      <div class="attack"><span>Spends over the cap</span><code>constraint_violated</code></div>
+      <div class="attack"><span>Skips its own policy engine</span><code>constraint_violated</code></div>
+      <div class="attack"><span>Borrows a wider mandate</span><code>sd_hash_mismatch</code></div>
+      <div class="attack"><span>Forges a mandate</span><code>open_signature_invalid</code></div>
+      <div class="attack"><span>Alters the buyer's details</span><code>disclosure_invalid</code></div>
+      <div class="attack"><span>Buys after revocation</span><code>mandate_not_usable</code></div>
+      <div class="attack"><span>Replays a presentation</span><code>nonce_replayed</code></div>
+      <div class="attack"><span>A stranger reuses it</span><code>key_binding_invalid</code></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="alert" data-title="Under the cap. Still refused.">
+  <div class="head">
+    <p class="eyebrow">Why the merchant checks</p>
+    <h2>Under the cap.<br>Still refused.</h2>
+  </div>
+  <div class="body">
+    <div class="cats" style="margin-bottom:28px">
+      <div class="cat no"><svg class="ico lg"><use href="#i-tech"/></svg><span>Hardware · $95</span></div>
+    </div>
+    <div class="checks reveal" data-cascade="110">
+      <div class="check"><i>✓</i> every signature — authentic</div>
+      <div class="check"><i>✓</i> on-chain reservation — real, $95 fits under $200</div>
+      <div class="check no"><i>✗</i> <b>hardware isn't in the mandate</b></div>
+    </div>
+  </div>
+  <div class="foot">
+    <p class="punch">A contract knows amounts.<br><strong>Only the merchant knows the mandate.</strong></p>
+  </div>
+</section>
+
+<!-- 14 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="path" data-title="The revocation window">
+  <div class="head">
+    <p class="eyebrow">Trial by fire</p>
+    <h2>Authorized, not charged.</h2>
+  </div>
+  <div class="body">
+    <div class="flow">
+      <div class="node"><span>Buyer</span><strong id="v-buyer">$1,200</strong><small>available</small></div>
+      <div class="arrow" id="a1"><label id="l1">hold</label><div class="track"></div></div>
+      <div class="node" id="n-held"><span>Held</span><strong id="v-held">$0</strong><small id="s-held">not moved</small></div>
+      <div class="arrow" id="a2"><label id="l2">capture</label><div class="track"></div></div>
+      <div class="node"><span>Merchant</span><strong id="v-merchant">$0</strong><small>settled</small></div>
+    </div>
+    <p class="punch" id="cap" style="margin-top:26px;min-height:64px;max-width:56ch">The money is still the buyer's.</p>
+  </div>
+</section>
+
+<!-- 15 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="grid" data-title="The dispute answers itself">
+  <div class="head">
+    <p class="eyebrow">Bonus · dispute</p>
+    <h2>“I never authorized this.”</h2>
+  </div>
+  <div class="body">
+    <svg class="dia" viewBox="0 0 1120 250" role="img" aria-label="Four signed documents, each referencing the previous one by hash.">
+      <g data-pop style="animation-delay:120ms"><rect class="box key" x="1" y="8" width="256" height="96" rx="11"/><text class="lbl" x="22" y="38">01 · the buyer</text><text class="t" x="22" y="72">The open mandate</text></g>
+      <g data-pop style="animation-delay:200ms"><rect class="box" x="289" y="8" width="256" height="96" rx="11"/><text class="lbl" x="310" y="38">02 · the agent</text><text class="t" x="310" y="72">The closed mandate</text></g>
+      <g data-pop style="animation-delay:280ms"><rect class="box" x="577" y="8" width="256" height="96" rx="11"/><text class="lbl" x="598" y="38">03 · the merchant</text><text class="t" x="598" y="72">The cart</text></g>
+      <g data-pop style="animation-delay:360ms"><rect class="box" x="865" y="8" width="254" height="96" rx="11"/><text class="lbl" x="886" y="38">04 · the merchant</text><text class="t" x="886" y="72">The receipt</text></g>
+
+      <path class="link strong" d="M417 104 V148 H129 V116" pathLength="1" data-draw style="animation-delay:560ms"/>
+      <polygon class="tip strong" points="124,116 134,116 129,106" data-pop style="animation-delay:1140ms"/>
+      <path class="link strong" d="M705 104 V184 H417 V116" pathLength="1" data-draw style="animation-delay:700ms"/>
+      <polygon class="tip strong" points="412,116 422,116 417,106" data-pop style="animation-delay:1280ms"/>
+      <path class="link strong" d="M992 104 V220 H705 V116" pathLength="1" data-draw style="animation-delay:840ms"/>
+      <polygon class="tip strong" points="700,116 710,116 705,106" data-pop style="animation-delay:1420ms"/>
+
+      <text class="m" x="440" y="144" data-pop style="animation-delay:1140ms">sd_hash</text>
+      <text class="m" x="728" y="180" data-pop style="animation-delay:1280ms">checkout_hash</text>
+      <text class="m" x="1014" y="216" data-pop style="animation-delay:1420ms">reference</text>
+    </svg>
+  </div>
+  <div class="foot">
+    <p class="punch">Signed <strong>before</strong> the purchase.<br>Not assembled after the claim.</p>
+  </div>
+</section>
+
+<!-- 16 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="grid" data-title="Decision log">
+  <div class="head">
+    <p class="eyebrow">Decision log</p>
+    <h2>What we chose against.</h2>
+  </div>
+  <div class="body">
+    <div class="decisions stagger">
+      <div class="decision"><p class="eyebrow">#01 · creating a mandate</p><h4>Form-first, drafted by the agent</h4><p class="alt">Not <s>a chatbot conversation</s></p></div>
+      <div class="decision"><p class="eyebrow">#02 · where authority lives</p><h4>A smart contract</h4><p class="alt">Not <s>an application database</s></p></div>
+      <div class="decision"><p class="eyebrow">#03 · buyer experience</p><h4>Ordinary payment methods</h4><p class="alt">Not <s>a wallet to manage</s></p></div>
+      <div class="decision"><p class="eyebrow">#04 · payment primitive</p><h4>PaymentIntent, manual capture</h4><p class="alt">Not <s>Stripe's Shared Payment Token</s> — private preview, no Argentina</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 ------------------------------------------------------------------ -->
+<section class="slide" data-anim data-bg="glow" data-title="Real vs mocked">
+  <div class="head">
+    <p class="eyebrow">Before you ask</p>
+    <h2>Real, and mocked.</h2>
+  </div>
+  <div class="body">
+    <div class="cols c2" style="gap:60px">
+      <div>
+        <p class="eyebrow" style="margin-bottom:18px">Real</p>
+        <ul class="ledger stagger">
+          <li><i>·</i> Contracts on a running EVM</li>
+          <li><i>·</i> ES256 signatures</li>
+          <li><i>·</i> Salted per-field hashes</li>
+          <li><i>·</i> Stripe's live API</li>
+        </ul>
+      </div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:18px">Mocked, on purpose</p>
+        <ul class="ledger no stagger">
+          <li><i>×</i> The money</li>
+          <li><i>×</i> The catalog</li>
+          <li><i>×</i> The buyer's profile</li>
+          <li><i>×</i> The KYC credential</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · close ------------------------------------------------------- -->
+<section class="slide" data-anim data-bg="glow" data-title="The third door">
+  <div class="head">
+    <p class="eyebrow">The third door</p>
+    <h2>Take the sale. Keep the proof.</h2>
+  </div>
+  <div class="body">
+    <div class="doors" id="doors">
+      <div class="door"><svg class="ico lg"><use href="#i-block"/></svg><p>Block the bot</p><span>Lose the sale</span></div>
+      <div class="door"><svg class="ico lg"><use href="#i-open"/></svg><p>Wave it through</p><span>Eat the fraud</span></div>
+      <div class="door" data-third="1"><svg class="ico lg"><use href="#i-open"/></svg><p>Check the mandate</p><span>Sell to the agent. Keep the receipt that proves a person allowed it.</span></div>
+    </div>
+  </div>
+  <div class="foot">
+    <p class="punch">Revoke it mid-purchase.<br><strong>Watch the money come back.</strong></p>
+  </div>
+</section>
+
+</main>
+
+<div id="overview" role="dialog" aria-label="Slide overview" aria-modal="true"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const stage = document.getElementById("stage");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const progress = document.getElementById("progress");
+  const counter = document.getElementById("counter");
+  const hint = document.getElementById("hint");
+  const overview = document.getElementById("overview");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let index = 0;
+  let timers = [];
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+
+  function fit() {
+    stage.style.setProperty("--scale", Math.min(innerWidth / 1280, innerHeight / 720));
+  }
+
+  function cascade(slide) {
+    slide.querySelectorAll(".reveal").forEach((group) => {
+      const step = Number(group.dataset.cascade || 60);
+      Array.from(group.children).forEach((child, i) => {
+        child.style.animationDelay = (reduced ? 0 : 140 + i * step) + "ms";
+      });
+    });
+  }
+
+  /* The allowed categories light up one by one. The one that stays dark is the
+     one the mandate refuses — and it's the same one refused on slide 13. */
+  function playCats(slide) {
+    const cats = slide.querySelectorAll(".cat[data-on]");
+    if (!cats.length) return;
+    cats.forEach((c) => c.classList.remove("on"));
+    if (reduced) { cats.forEach((c) => c.classList.add("on")); return; }
+    cats.forEach((c, i) => at(320 + i * 200, () => c.classList.add("on")));
+  }
+
+  /* The deck opened on two bad doors. It closes on the third, lighting up
+     after the other two have had a beat to be recognised again. */
+  function playDoors(slide) {
+    const third = slide.querySelector(".door[data-third]");
+    if (!third) return;
+    third.classList.remove("on");
+    if (reduced) { third.classList.add("on"); return; }
+    at(900, () => third.classList.add("on"));
+  }
+
+  /* Selective disclosure reads better opening than described. */
+  function playVault(slide) {
+    const cells = slide.querySelectorAll(".cell[data-open]");
+    if (!cells.length) return;
+    cells.forEach((c) => c.classList.remove("open"));
+    if (reduced) { cells.forEach((c) => c.classList.add("open")); return; }
+    cells.forEach((c, i) => at(600 + i * 260, () => c.classList.add("open")));
+  }
+
+  /* The buyer lowers their own cap in front of the room. */
+  function playEdit(slide) {
+    const val = slide.querySelector("#val");
+    if (!val) return;
+    const was = slide.querySelector("#was"), tag = slide.querySelector("#tag");
+    val.textContent = "$400"; was.style.opacity = "0"; tag.style.opacity = "0";
+    if (reduced) { val.textContent = "$200"; was.style.opacity = "1"; tag.style.opacity = "1"; return; }
+    at(1100, () => { val.textContent = "$200"; was.style.opacity = "1"; tag.style.opacity = "1"; });
+  }
+
+  /* Purchases land one at a time and the budget bar follows. Different things,
+     one mandate — the point the slide makes without saying it. */
+  function playSpend(slide) {
+    const rows = slide.querySelectorAll("#buys .buy");
+    if (!rows.length) return;
+    const fill = slide.querySelector("#fill");
+    const spent = slide.querySelector("#spent");
+    const left = slide.querySelector("#left");
+    const TOTAL = 1200;
+    const amounts = [130, 95, 48];
+    const money = (n) => "$" + n.toLocaleString("en-US");
+
+    rows.forEach((r) => r.classList.remove("in"));
+    fill.style.width = "0";
+    spent.textContent = "$0";
+    left.textContent = money(TOTAL);
+
+    if (reduced) {
+      rows.forEach((r) => r.classList.add("in"));
+      const all = amounts.reduce((a, b) => a + b, 0);
+      fill.style.width = (all / TOTAL * 100) + "%";
+      spent.textContent = money(all);
+      left.textContent = money(TOTAL - all);
+      return;
+    }
+
+    let running = 0;
+    rows.forEach((row, i) => {
+      at(500 + i * 620, () => {
+        row.classList.add("in");
+        running += amounts[i];
+        fill.style.width = (running / TOTAL * 100) + "%";
+        spent.textContent = money(running);
+        left.textContent = money(TOTAL - running);
+      });
+    });
+  }
+
+  /* The argument of the deck: money leaves the available balance, is held, and
+     on revoke goes back without ever reaching the merchant. */
+  function playFlow(slide) {
+    const q = (id) => slide.querySelector("#" + id);
+    const buyer = q("v-buyer");
+    if (!buyer) return;
+
+    const held = q("v-held"), a1 = q("a1"), a2 = q("a2"), l2 = q("l2");
+    const sHeld = q("s-held"), cap = q("cap"), nHeld = q("n-held");
+
+    [a1, a2].forEach((a) => a.classList.remove("on", "back"));
+    nHeld.classList.remove("held");
+    buyer.textContent = "$1,200"; held.textContent = "$0";
+    l2.textContent = "capture"; sHeld.textContent = "not moved";
+    cap.textContent = "The money is still the buyer's.";
+
+    if (reduced) return;
+
+    at(800, () => {
+      a1.classList.add("on");
+      buyer.textContent = "$1,070";
+      held.textContent = "$130";
+      nHeld.classList.add("held");
+      cap.textContent = "Authorized. Committed — and still theirs.";
+    });
+
+    at(2400, () => {
+      cap.textContent = "The buyer revokes. Mid-purchase.";
+      l2.textContent = "revoked";
+      a2.classList.add("back");
+    });
+
+    at(3400, () => {
+      a1.classList.remove("on");
+      buyer.textContent = "$1,200";
+      held.textContent = "$0";
+      nHeld.classList.remove("held");
+      sHeld.textContent = "released";
+      cap.innerHTML = "Released. <strong>Nothing ever moved.</strong>";
+    });
+  }
+
+  function show(next) {
+    timers.forEach(clearTimeout);
+    timers = [];
+    index = Math.max(0, Math.min(next, slides.length - 1));
+
+    slides.forEach((s, i) => s.classList.toggle("is-active", i === index));
+    const slide = slides[index];
+
+    slide.style.animation = "none";
+    void slide.offsetWidth;
+    slide.style.animation = "";
+
+    cascade(slide);
+    playCats(slide);
+    playEdit(slide);
+    playSpend(slide);
+    playFlow(slide);
+    playVault(slide);
+    playDoors(slide);
+
+    progress.style.width = ((index + 1) / slides.length * 100) + "%";
+    counter.textContent = String(index + 1).padStart(2, "0") + " / " + slides.length;
+    if (index > 0) hint.classList.add("gone");
+    if (overview.classList.contains("open")) {
+      overview.querySelectorAll(".thumb").forEach((t, i) => t.classList.toggle("current", i === index));
+    }
+  }
+
+  function buildOverview() {
+    overview.innerHTML = "";
+    slides.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.className = "thumb" + (i === index ? " current" : "");
+      b.innerHTML = '<span class="n">' + String(i + 1).padStart(2, "0") + '</span><span class="t"></span>';
+      b.querySelector(".t").textContent = s.dataset.title || "";
+      b.addEventListener("click", () => { toggleOverview(false); show(i); });
+      overview.appendChild(b);
+    });
+  }
+
+  function toggleOverview(open) {
+    const next = open === undefined ? !overview.classList.contains("open") : open;
+    overview.classList.toggle("open", next);
+    if (next) { buildOverview(); overview.querySelector(".thumb").focus(); }
+  }
+
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overview.classList.contains("open")) { toggleOverview(false); return; }
+    switch (e.key) {
+      case "ArrowRight": case " ": case "PageDown": case "n": e.preventDefault(); show(index + 1); break;
+      case "ArrowLeft": case "PageUp": case "p": e.preventDefault(); show(index - 1); break;
+      case "Home": show(0); break;
+      case "End": show(slides.length - 1); break;
+      case "f": case "F": document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); break;
+      case "o": case "O": e.preventDefault(); toggleOverview(); break;
+      case "r": case "R": show(index); break;
+      default: if (/^[1-9]$/.test(e.key)) show(Number(e.key) - 1);
+    }
+  });
+
+  addEventListener("click", (e) => {
+    if (overview.classList.contains("open")) return;
+    if (getSelection().toString()) return;
+    show(index + (e.clientX < innerWidth * 0.18 ? -1 : 1));
+  });
+
+  addEventListener("resize", fit);
+  fit();
+  show(0);
+})();
+</script>
+</body>
+</html>
