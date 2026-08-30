@@ -13,3 +13,6 @@ cache/
 
 # Local artifacts
 *.docx
+
+# Playwright MCP scratch output
+.playwright-mcp/

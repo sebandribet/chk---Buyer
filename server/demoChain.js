@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import ganache from "ganache";
 import { ethers } from "ethers";
 import solc from "solc";
-import { askMarketplaceAgent } from "./marketplaceAgent.js";
+import { askOfficeAgent, agentConfigured } from "./officeAgent.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDirectory = path.resolve(__dirname, "..");
@@ -249,6 +249,8 @@ function makeMandateDraft({
   quantity,
   quantitySpecified = true,
   statedBudget,
+  commitment = "committed",
+  excludes = [],
   assistantReply,
   agentMode,
   agentModel,
@@ -281,8 +283,16 @@ function makeMandateDraft({
         at: now,
         summary: "No catalog product was a safe semantic match.",
       }],
-      recommendation: "Try describing the use case, required capability, or a product shown in the live company catalog.",
-      reply: `${safeReply(assistantReply) || "Sorry, I couldn't find a product in the available market that safely matches that request."} No mandate or payment was created.`,
+      excludes,
+      // Cuando lo que frenó el borrador fue una exclusión del propio comprador,
+      // decirlo importa: "no encontré nada" y "descartaste lo único que había"
+      // llevan al humano a hacer cosas distintas.
+      recommendation: excludes.length > 0
+        ? `You ruled out ${excludes.join(", ")}, and nothing else in the catalog does that job. Lift that exclusion or describe a different product.`
+        : "Try describing the use case, required capability, or a product shown in the live company catalog.",
+      reply: excludes.length > 0
+        ? `You asked me not to buy ${excludes.join(" or ")}, and that rules out everything I could use for this. No mandate or payment was created.`
+        : `${safeReply(assistantReply) || "Sorry, I couldn't find a product in the available market that safely matches that request."} No mandate or payment was created.`,
     };
   }
 
@@ -314,11 +324,15 @@ function makeMandateDraft({
     quantity: normalizedQuantity,
     budget: totalBudget.toFixed(2),
     maxUnitPrice: maxUnitPrice.toFixed(2),
+    commitment,
+    // De dónde salió el techo. Importa que se lea distinto: "buyer prompt" es
+    // un límite que el humano puso; los otros dos son una sugerencia del
+    // agente que todavía nadie autorizó, y la UI los muestra como tal.
     budgetSource: hasStatedBudget
       ? "buyer prompt"
       : continuingSameProduct
         ? "previous draft unit cap"
-        : "live seller quotes",
+        : "agent suggestion · live seller quotes",
     approvedSellers: ["OfficeCore", "SupplyHub"],
     agentMode,
     agentModel,
@@ -362,11 +376,66 @@ function parsePurchaseIntent(prompt, previousDraft = null) {
   });
 }
 
+/**
+ * Necesidad extraída → producto del catálogo. Determinístico, sin modelo.
+ *
+ * El agente devuelve "office chair" con { type: "ergonomic" }; acá se arma el
+ * texto de búsqueda y se puntúa contra el catálogo con el mismo scorer que usa
+ * el modo offline. Es el punto donde se decide qué se compra, y por eso está
+ * de este lado: el modelo describe, el código resuelve.
+ */
+function resolveNeedToProduct(need) {
+  const attrText = Object.values(need.attrs ?? {}).join(" ");
+  return findCatalogProduct(`${attrText} ${need.canonical}`.trim());
+}
+
+/**
+ * El borrador que produce el agente cuando le falta un dato para poder gastar.
+ *
+ * No es un error: es la respuesta correcta. Antes, un pedido sin presupuesto
+ * generaba igual un borrador con un techo calculado por el servidor, y eso es
+ * autoridad de gasto que nadie otorgó.
+ */
+function clarificationDraft({ prompt, agent, previousDraft }) {
+  const now = new Date().toISOString();
+  const questions = agent.result.questions ?? [];
+  return {
+    id: previousDraft?.id ?? `draft-${Date.now()}`,
+    status: "needs_input",
+    revision: draftRevisionNumber(previousDraft),
+    prompt: String(prompt).trim(),
+    productId: null,
+    product: null,
+    quantity: null,
+    maxUnitPrice: null,
+    budget: null,
+    commitment: agent.result.commitment,
+    questions,
+    agentMode: agent.mode,
+    agentModel: agent.model,
+    agentRequestId: agent.requestId,
+    agentError: null,
+    createdAt: previousDraft?.createdAt ?? now,
+    updatedAt: now,
+    history: previousDraft?.history ?? [],
+    recommendation: "The agent needs this before it can draft spend limits. Nothing was created and no money can move.",
+    reply: agent.result.reply,
+  };
+}
+
 async function resolvePurchaseIntent({ prompt, conversation, previousDraft = null }) {
-  const agent = await askMarketplaceAgent({ prompt, catalog: marketplaceCatalog, conversation, draft: previousDraft });
+  const agent = await askOfficeAgent({
+    prompt,
+    conversation,
+    resolveNeed: resolveNeedToProduct,
+    catalog: marketplaceCatalog,
+  });
   if (agent.mode === "catalog fallback") return parsePurchaseIntent(prompt, previousDraft);
+  if (agent.result !== null && agent.result.status === "clarification_needed") {
+    return clarificationDraft({ prompt, agent, previousDraft });
+  }
   if (agent.result === null) {
-    const reason = safeReply(agent.error).slice(0, 240) || "The OpenAI request could not be completed.";
+    const reason = safeReply(agent.error).slice(0, 240) || "The purchasing agent could not complete the request.";
     return {
       id: previousDraft?.id ?? `draft-${Date.now()}`,
       status: "agent_error",
@@ -384,16 +453,18 @@ async function resolvePurchaseIntent({ prompt, conversation, previousDraft = nul
       createdAt: previousDraft?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       history: previousDraft?.history ?? [],
-      recommendation: "Check the OpenAI connection and try again; the system did not create a mandate or payment authorization.",
-      reply: `I couldn't reach the live OpenAI agent: ${reason} No mandate was created and no money can move.`,
+      recommendation: "Check the agent's model connection and try again; the system did not create a mandate or payment authorization.",
+      reply: `I couldn't run the purchasing agent: ${reason} No mandate was created and no money can move.`,
     };
   }
   return makeMandateDraft({
     prompt,
-    productId: agent.result.product_id,
-    quantity: agent.result.quantity,
-    quantitySpecified: agent.result.has_quantity,
-    statedBudget: agent.result.has_budget ? agent.result.budget_total_usd : null,
+    productId: agent.result.productId,
+    quantity: agent.result.quantity ?? 1,
+    quantitySpecified: agent.result.quantityStated,
+    statedBudget: agent.result.budgetStated ? agent.result.budgetUsd : null,
+    commitment: agent.result.commitment,
+    excludes: agent.result.excludes ?? [],
     assistantReply: agent.result.reply,
     agentMode: agent.mode,
     agentModel: agent.model,
@@ -580,8 +651,8 @@ export class DemoChain {
         role: "assistant",
         content: "Hi — tell me what you need and I’ll search both seller catalogs before preparing a purchase.",
       }],
-      agentMode: process.env.OPENAI_API_KEY && process.env.MARKETPLACE_AGENT_MODE !== "fallback" ? "OpenAI ready" : "catalog fallback",
-      agentModel: process.env.OPENAI_API_KEY && process.env.MARKETPLACE_AGENT_MODE !== "fallback" ? (process.env.OPENAI_MODEL ?? "gpt-4.1-mini") : null,
+      agentMode: agentConfigured() ? "agent ready" : "catalog fallback",
+      agentModel: agentConfigured() ? (process.env.OPENAI_MODEL ?? "gpt-4.1-mini") : null,
       agentRequestId: null,
       agentError: null,
       paymentMethodEnrolled: false,
@@ -1120,7 +1191,7 @@ export class DemoChain {
           model: runtime.agentModel,
           requestId: runtime.agentRequestId,
           error: runtime.agentError,
-          configured: Boolean(process.env.OPENAI_API_KEY) && process.env.MARKETPLACE_AGENT_MODE !== "fallback",
+          configured: agentConfigured(),
         },
         activeMandateId: runtime.activeMarketplaceMandateId?.toString() ?? null,
         merchants: [

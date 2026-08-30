@@ -362,8 +362,15 @@ function questionTopic(q: ClarificationQuestion): string {
   return campo.replace(/[^a-z0-9]/g, "");
 }
 
-/** Dedupe por tema, priorizando las preguntas del modelo (suelen tener mejor redacción). */
-function mergeQuestions(
+/**
+ * Dedupe por tema, priorizando las preguntas del modelo (suelen tener mejor
+ * redacción).
+ *
+ * Exportada porque el módulo de oficina (`office.ts`) la reusa: los nombres de
+ * los campos cambian entre dominios, pero "no le preguntes dos veces lo mismo
+ * al humano" es la misma regla en todos.
+ */
+export function mergeQuestions(
   fromModel: ClarificationQuestion[],
   fromCode: ClarificationQuestion[],
 ): ClarificationQuestion[] {

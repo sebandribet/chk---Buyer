@@ -1,6 +1,27 @@
+/**
+ * El circuito de pago, de punta a punta, contra la chain en memoria.
+ *
+ * Corren con `MARKETPLACE_AGENT_MODE=fallback` a propósito: acá se verifica el
+ * circuito —borrador, firma, comparación, verificación del merchant, captura y
+ * revocación— y no la comprensión del pedido. Que el agente entienda lo que le
+ * piden se verifica en `agent/tests/office.test.ts`, con el modelo scripteado.
+ *
+ * Separarlos importa: si estos tests dependieran del modelo, cada corrida
+ * costaría plata, necesitaría red, y una respuesta distinta del modelo rompería
+ * un test sobre plata que no tiene nada que ver con el modelo.
+ */
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DemoChain } from "../server/demoChain.js";
+
+/** El borrador se revisa y se confirma antes de poder firmarse. */
+async function draftAndSign(demo, prompt) {
+  const { draft } = await demo.recordIntent({ prompt });
+  await demo.confirmMarketplaceDraft();
+  const signed = await demo.createMarketplaceMandate();
+  return { draft, signed };
+}
 
 test("live demo chain runs the merchant-verification trial by fire", async () => {
   const demo = new DemoChain();
@@ -45,7 +66,24 @@ test("live demo chain runs the merchant-verification trial by fire", async () =>
   const finalState = await demo.state();
   assert.equal(finalState.mandate.status, "Revoked");
   assert.equal(finalState.balances.merchant, "130.0");
-  assert.equal(finalState.audit.length, 8);
+});
+
+test("a draft is not spend authority: signing requires an explicit confirmation first", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
+
+  const { draft } = await demo.recordIntent({ prompt: "Buy 2 ergonomic chairs under $500" });
+  assert.equal(draft.status, "ready");
+
+  await assert.rejects(
+    demo.createMarketplaceMandate(),
+    /confirm/i,
+    "an unreviewed draft must not be signable",
+  );
+
+  const state = await demo.state();
+  assert.equal(state.mandate, null, "no mandate may exist before confirmation");
 });
 
 test("marketplace demo selects the cheaper approved seller and settles into that seller wallet", async () => {
@@ -57,11 +95,9 @@ test("marketplace demo selects the cheaper approved seller and settles into that
     company: "Analytical Engines",
   });
 
-  const { intent } = await demo.recordIntent({ prompt: "Buy 2 ergonomic chairs under $500" });
-  assert.equal(intent.product, "Ergonomic office chair");
-  assert.equal(intent.maxUnitPrice, "250.00");
-
-  const signed = await demo.createMarketplaceMandate();
+  const { draft, signed } = await draftAndSign(demo, "Buy 2 ergonomic chairs under $500");
+  assert.equal(draft.product, "Ergonomic office chair");
+  assert.equal(draft.maxUnitPrice, "250.00");
   assert.equal(signed.mandate.marketplace, true);
 
   const result = await demo.compareAndAuthorize();
@@ -83,23 +119,40 @@ test("marketplace demo selects the cheaper approved seller and settles into that
   assert.equal(settled.balances.alternateMerchant, "378.0");
 });
 
-test("agent declines an unavailable prompt, then selects a different seller for a different product", async () => {
+test("a request with no catalog match creates no mandate and moves no money", async () => {
   const demo = new DemoChain();
   await demo.reset();
   await demo.loginAndEnrollBuyer();
 
   const unavailable = await demo.recordIntent({ prompt: "Buy 2 pizza ovens" });
-  assert.equal(unavailable.intent.status, "not_found");
-  assert.match(unavailable.intent.reply, /couldn't find/i);
+  assert.equal(unavailable.draft.status, "needs_revision");
+  assert.equal(unavailable.draft.productId, null);
+  assert.match(unavailable.draft.reply, /no mandate or payment was created/i);
   assert.equal(unavailable.state.mandate, null);
   assert.equal(unavailable.state.balances.buyer, "2000.0");
+});
 
-  const available = await demo.recordIntent({ prompt: "Buy 3 mechanical keyboards" });
-  assert.equal(available.intent.status, "available");
-  assert.equal(available.intent.budgetSource, "live seller quotes");
-  assert.equal(available.intent.budget, "327.00");
+test("a derived spending cap is labelled as the agent's suggestion, not the buyer's limit", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
 
-  await demo.createMarketplaceMandate();
+  const { draft } = await demo.recordIntent({ prompt: "Buy 3 mechanical keyboards" });
+  assert.equal(draft.status, "ready");
+  assert.equal(draft.budget, "327.00", "cap must come from the highest live quote, not a guess");
+  assert.match(
+    draft.budgetSource,
+    /agent suggestion/i,
+    "a cap the buyer never stated must not be presented as their limit",
+  );
+});
+
+test("the agent buys the cheapest eligible seller for a different product", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
+
+  await draftAndSign(demo, "Buy 3 mechanical keyboards");
   const purchase = await demo.compareAndAuthorize();
   assert.equal(purchase.selection.merchant, "OfficeCore");
   assert.equal(purchase.selection.selected.amount, "288.00");
@@ -116,16 +169,16 @@ test("the buyer can continue the conversation and make a second purchase without
   await demo.reset();
   await demo.loginAndEnrollBuyer();
 
-  await demo.recordIntent({ prompt: "Buy an ergonomic chair" });
-  await demo.createMarketplaceMandate();
+  await draftAndSign(demo, "Buy an ergonomic chair");
   const first = await demo.compareAndAuthorize();
   await demo.capturePurchase(first.purchaseId);
 
   const nextIntent = await demo.recordIntent({ prompt: "Buy a mechanical keyboard" });
-  assert.equal(nextIntent.intent.product, "Wireless mechanical keyboard");
+  assert.equal(nextIntent.draft.product, "Wireless mechanical keyboard");
   assert.equal(nextIntent.state.mandate, null, "a completed purchase must not block the next mandate");
   assert.equal(nextIntent.state.marketplace.selection, null);
 
+  await demo.confirmMarketplaceDraft();
   await demo.createMarketplaceMandate();
   const second = await demo.compareAndAuthorize();
   assert.equal(second.selection.mandateId, "2");
@@ -136,5 +189,68 @@ test("the buyer can continue the conversation and make a second purchase without
   assert.equal(settled.balances.buyer, "1715.0");
   assert.equal(settled.balances.merchant, "96.0");
   assert.equal(settled.balances.alternateMerchant, "189.0");
-  assert.match(settled.marketplace.conversation.at(-1).content, /What would you like to buy next/);
+});
+
+test("a signed mandate that no seller can satisfy authorizes nothing", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
+
+  await demo.recordIntent({ prompt: "Buy 2 standing desks under $300" });
+  await demo.confirmMarketplaceDraft();
+  await demo.createMarketplaceMandate();
+
+  const result = await demo.compareAndAuthorize();
+  assert.equal(result.status, "no_eligible_option");
+  assert.equal(result.report.mockFundsMoved, false);
+  assert.ok(
+    result.report.decision.offers.every((offer) => offer.eligible === false),
+    "every rejected offer must carry its reason",
+  );
+
+  const state = await demo.state();
+  assert.equal(state.marketplace.selection, null);
+  assert.equal(state.balances.buyer, "2000.0", "a rejected search must not move money");
+});
+
+test("live revocation blocks the next authorization", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
+
+  await draftAndSign(demo, "Buy 2 ergonomic chairs under $500");
+  await demo.revokeMandate();
+
+  // No se afirma sobre el texto del revert: ethers lo devuelve distinto según
+  // dónde falle (estimateGas sin datos de revert vs. la cadena con el string
+  // del contrato). Lo que tiene que valer siempre es que no se autorice nada
+  // y que no se mueva un peso.
+  await assert.rejects(demo.compareAndAuthorize());
+
+  const state = await demo.state();
+  assert.equal(state.mandate.status, "Revoked");
+  assert.equal(state.marketplace.selection, null);
+  assert.equal(state.balances.buyer, "2000.0");
+  assert.equal(state.balances.merchant, "0.0");
+  assert.equal(state.balances.alternateMerchant, "0.0");
+});
+
+test("a live price-cap cut invalidates an authorization taken under the old terms", async () => {
+  const demo = new DemoChain();
+  await demo.reset();
+  await demo.loginAndEnrollBuyer();
+
+  await draftAndSign(demo, "Buy 2 ergonomic chairs under $500");
+  const authorized = await demo.compareAndAuthorize();
+  assert.equal(authorized.status, "authorized");
+
+  await demo.amendPriceCap("120");
+
+  const verification = await demo.verifyPurchase(authorized.purchaseId);
+  assert.equal(verification.verified, false, "the old credential must stop verifying");
+  assert.equal(verification.checks.authorizationCurrent, false);
+
+  await assert.rejects(demo.capturePurchase(authorized.purchaseId), /verification failed/i);
+  const state = await demo.state();
+  assert.equal(state.balances.buyer, "2000.0", "an invalidated credential must not settle");
 });

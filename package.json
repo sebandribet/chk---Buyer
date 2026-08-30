@@ -4,22 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"node --watch server/index.js\"",
+    "dev": "concurrently \"vite\" \"tsx --watch server/index.js\"",
     "build": "vite build",
-    "start": "node server/index.js",
-    "test": "npm run test:contracts && npm run test:mandates && npm run test:agent && npm run build",
-    "test:contracts": "MARKETPLACE_AGENT_MODE=fallback node --test test/*.test.js",
-    "test:mandates": "forge test",
-    "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test"
+    "start": "tsx server/index.js",
+    "test": "npm run test:agent && npm run test:payments && npm run test:solidity && npm run build",
+    "test:agent": "npm --prefix agent run typecheck && npm --prefix agent test",
+    "test:payments": "MARKETPLACE_AGENT_MODE=fallback tsx --test test/*.test.js",
+    "test:solidity": "if command -v forge >/dev/null 2>&1; then forge test; else echo '  (skipped) Foundry not installed \u2014 install forge to run test/MandateModule.t.sol'; fi"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.24",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "openai": "^7.8.0",
-    "pino": "^9.7.0",
-    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -30,6 +27,7 @@
     "ethers": "^6.16.0",
     "ganache": "^7.9.2",
     "solc": "0.8.24",
+    "tsx": "^4.23.13",
     "vite": "^6.0.7"
   },
   "engines": {
