@@ -1,9 +1,0 @@
-{
-  "op": "substitution_judgement",
-  "user": "{\n  \"pedido\": {\n    \"canonical\": \"leche\",\n    \"attrs\": {\n      \"tipo\": \"descremada\"\n    },\n    \"unidad\": \"L\"\n  },\n  \"alternativa\": {\n    \"sku\": \"EST-LEC-E12\",\n    \"supplierId\": \"este\",\n    \"canonical\": \"leche\",\n    \"attrs\": {\n      \"tipo\": \"entera\"\n    },\n    \"category\": \"alimentos\",\n    \"unitPriceArs\": 1200,\n    \"unit\": \"L\",\n    \"totalSize\": 10.8,\n    \"stock\": 30,\n    \"deliveryDays\": 2\n  }\n}",
-  "recordedAt": "2026-08-29T18:10:08.571Z",
-  "response": {
-    "acceptable": false,
-    "reason": "La leche entera tiene un contenido de grasa diferente al de la leche descremada, lo que afecta su uso en recetas específicas."
-  }
-}

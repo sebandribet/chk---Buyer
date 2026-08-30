@@ -1,0 +1,9 @@
+{
+  "op": "itinerary_equivalence",
+  "user": "{\n  \"requested\": {\n    \"origin\": \"Buenos Aires\",\n    \"destination\": \"Cordoba\",\n    \"departureDate\": \"2026-10-09\",\n    \"cabin\": null,\n    \"maxStops\": null,\n    \"passengers\": 2\n  },\n  \"offered\": {\n    \"quoteId\": \"VY-AS-COR-0915-1640\",\n    \"origin\": \"Buenos Aires\",\n    \"destination\": \"Cordoba\",\n    \"departureDate\": \"2026-09-15\",\n    \"departureTime\": \"16:40\",\n    \"arrivalTime\": \"18:16\",\n    \"cabin\": \"Economy\",\n    \"stops\": 0,\n    \"seats\": 2,\n    \"unitPriceUsd\": 149\n  },\n  \"differences\": [\n    {\n      \"term\": \"departureDate\",\n      \"requested\": \"2026-10-09\",\n      \"offered\": \"2026-09-15\"\n    }\n  ]\n}",
+  "recordedAt": "2026-08-30T13:57:10.645Z",
+  "response": {
+    "acceptable": false,
+    "reason": "The offered itinerary has a different departure date, and the traveller did not specify flexible dates."
+  }
+}

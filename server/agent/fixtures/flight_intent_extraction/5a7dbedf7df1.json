@@ -1,0 +1,25 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: How much is a flight to Cordoba?\nHuman: From Buenos Aires, 2 passengers, on 2026-09-15, any airline, up to $300 total, and this mandate stays valid through 2026-09-20",
+  "recordedAt": "2026-08-30T14:17:22.116Z",
+  "response": {
+    "status": "ok",
+    "commitment": "exploratory",
+    "natural_language_description": "How much is a flight to Cordoba? From Buenos Aires, 2 passengers, on 2026-09-15, any airline, up to $300 total, and this mandate stays valid through 2026-09-20",
+    "trip": {
+      "origin": "Buenos Aires",
+      "destination": "Cordoba",
+      "departure_date": "2026-09-15",
+      "passengers": 2,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": "Any airline"
+    },
+    "constraints": {
+      "budget_usd": 300,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": "2026-09-20"
+    },
+    "questions": []
+  }
+}

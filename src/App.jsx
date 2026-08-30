@@ -1,683 +1,803 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
+  BadgeCheck,
+  Ban,
   Bot,
-  Building2,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
-  Clock3,
   FileSignature,
+  Plane,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
-  Store,
   WalletCards,
 } from "lucide-react";
 
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    ...options,
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? "The demo operation failed.");
+  return payload;
+}
+
+/**
+ * What the status line says for each decision the commitment gate can reach.
+ * Keyed by kind rather than sniffing the reply text, so a reply reworded in
+ * the agent cannot silently change what the operator is told happened.
+ */
+/**
+ * The rehearsed demo path, offered as a Tab completion in the composer.
+ *
+ * Every chat turn of the flow is here, including the answer to the agent's
+ * clarifying question, so the whole demo can be driven with Tab + Enter and
+ * ends in an authorized purchase.
+ *
+ * The numbers are chosen against the mock catalogue, and getting them wrong is
+ * the trap this script exists to avoid: budget is the TOTAL, so US$300 over 2
+ * tickets is a US$150 per-ticket cap, which admits the US$130, US$134 and
+ * US$149 Cordoba fares and excludes the US$189 one. A US$150 total would derive
+ * a US$75 cap and reject every fare in the catalogue.
+ *
+ * "any airline" matters too: the Seller term is a hard constraint, and only
+ * that exact phrase means "no airline restriction". Anything else - including a
+ * typo - is read as a specific carrier and matches nothing.
+ */
+const DEMO_SCRIPT = {
+  explore: "How much is a flight to Cordoba?",
+  terms: "From Buenos Aires, 2 passengers, on 2026-09-15, any airline, up to $300 total, and this mandate stays valid through 2026-09-20",
+  book: "Book it",
+};
+
+/**
+ * The next thing worth typing, from demo state alone.
+ *
+ * Returns "" when the next action is not a chat turn - a ready draft is waiting
+ * on Confirm and Sign, and suggesting a prompt there points away from the
+ * button the demo actually needs.
+ */
+function nextScriptPrompt(demo) {
+  const flight = demo?.flight;
+  if (!flight) return "";
+  if (demo.mandate?.active) return flight.selection ? "" : DEMO_SCRIPT.book;
+  if (flight.draft && ["ready", "reviewed"].includes(flight.draft.status)) return "";
+  // Whatever the agent asked for, this one answer carries every term the
+  // mandate needs, so the flow never stalls on a question we did not predict.
+  if (flight.clarification) return DEMO_SCRIPT.terms;
+  if (!flight.draft) return DEMO_SCRIPT.explore;
+  return DEMO_SCRIPT.terms;
+}
+
+const NOTICE_BY_KIND = {
+  clarification: "The agent is missing a term and would not guess it.",
+  suggestion: "The agent searched and compared. It authorized nothing.",
+  purchase: "The agent acted inside your signed mandate.",
+  blocked: "Your signed mandate refused that request.",
+  error: "The agent stopped rather than guess.",
+};
+
+function money(value) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+}
+
+function shortHash(value) {
+  if (!value) return "-";
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
 function App() {
+  const [demo, setDemo] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("Start the local demo, then chat with chk! Buyer.");
+  const [prompt, setPrompt] = useState("");
+  const [mandateOpen, setMandateOpen] = useState(false);
+  const [editingReviewedDraft, setEditingReviewedDraft] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [liveCap, setLiveCap] = useState("");
+  const [buyer] = useState({ name: "Marta Ruiz", email: "marta@chk.demo", company: "Marta Studio" });
+  const [draftForm, setDraftForm] = useState(blankDraft());
+  const chatRef = useRef(null);
+
+  const flight = demo?.flight;
+  const draft = flight?.draft;
+  const selection = flight?.selection;
+  const activeMandate = Boolean(demo?.mandate?.active);
+  const isSigned = draft?.status === "signed";
+  const isReviewed = draft?.status === "reviewed";
+  const isEditable = ["needs_input", "ready"].includes(draft?.status) || editingReviewedDraft;
+  const hasKyc = Boolean(demo?.kyc?.captureReady);
+  const scriptPrompt = nextScriptPrompt(demo);
+
+  useEffect(() => {
+    if (!draft) return;
+    setDraftForm(toForm(draft));
+    setLiveCap(draft.maxUnitPrice ?? "");
+    setEditingReviewedDraft(false);
+    setMandateOpen(true);
+  }, [draft?.id, draft?.revision, draft?.status]);
+
+  // Always scroll the chat down when messages, validation questions, or the
+  // mandate menu changes. The buyer never has to hunt for the agent's reply.
+  useEffect(() => {
+    const scroller = chatRef.current;
+    if (!scroller) return;
+    requestAnimationFrame(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    });
+  }, [flight?.conversation?.length, draft?.revision, draft?.status, mandateOpen, busy]);
+
+  async function run(label, work) {
+    setBusy(label);
+    setNotice("");
+    try {
+      const result = await work();
+      return result;
+    } catch (error) {
+      setNotice(error.message);
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function startDemo() {
+    const state = await run("reset", () => api("/api/demo/reset", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Local chain ready at block ${state.network.latestBlock}. No real card or money is involved.`);
+    }
+  }
+
+  async function verifyBuyer() {
+    const state = await run("kyc", () => api("/api/demo/kyc/login", {
+      method: "POST",
+      body: JSON.stringify(buyer),
+    }));
+    if (state) {
+      setDemo(state);
+      setNotice(`${state.buyer.name} is KYC-verified and an opaque mock payment token is enrolled.`);
+    }
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const text = prompt.trim();
+    if (!text || !demo) return;
+    const result = await run("chat", () => api("/api/demo/agent/intent", {
+      method: "POST",
+      body: JSON.stringify({ prompt: text }),
+    }));
+    if (result) {
+      setDemo(result.state);
+      setPrompt("");
+      setVerification(null);
+      if (result.draft) setMandateOpen(true);
+      setNotice(NOTICE_BY_KIND[result.kind] ?? result.reply);
+    }
+  }
+
+  /**
+   * Enter sends; Shift+Enter is a newline. Tab fills the next rehearsed prompt
+   * but never sends it - the demo should still show a human choosing to send.
+   */
+  function onComposerKey(event) {
+    if (event.key === "Tab" && !event.shiftKey && !prompt.trim() && scriptPrompt) {
+      event.preventDefault();
+      setPrompt(scriptPrompt);
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (prompt.trim() && !busy) sendMessage(event);
+    }
+  }
+
+  function updateDraftField(field, value) {
+    setDraftForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveDraft(event) {
+    event.preventDefault();
+    const state = await run("draft", () => api("/api/demo/mandate/draft", {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...draftForm,
+        quantity: Number(draftForm.quantity),
+        maxStops: Number(draftForm.maxStops),
+      }),
+    }));
+    if (state) {
+      setDemo(state);
+      setNotice(state.flight.draft.status === "ready"
+        ? `Draft v${state.flight.draft.revision} is ready to confirm. It still cannot spend.`
+        : "The mandate menu still needs the highlighted details.");
+    }
+  }
+
+  async function confirmDraft() {
+    const state = await run("confirm", () => api("/api/demo/mandate/draft/confirm", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setNotice("Terms confirmed. Signing remains a separate, explicit step.");
+    }
+  }
+
+  async function signMandate() {
+    const state = await run("sign", () => api("/api/demo/mandate", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setNotice(`Mandate #${state.mandate.id} is active on the mock chain. Search may now run within the signed limits.`);
+    }
+  }
+
+  async function searchFlights() {
+    const result = await run("search", () => api("/api/demo/flight/search-and-authorize", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setVerification(null);
+      setNotice(result.status === "authorized"
+        ? `${result.selection.selected.airline} was selected. The merchant must still verify before capture.`
+        : result.report.summary);
+    }
+  }
+
+  async function verifyMerchant() {
+    if (!selection) return;
+    const result = await run("verify", () => api(`/api/demo/merchant/verify/${selection.purchaseId}`));
+    if (result) {
+      setVerification(result);
+      setNotice(result.verified
+        ? "Merchant verification passed. The one-use mock payment is eligible for capture."
+        : "Merchant verification failed. Capture is blocked and no money moved.");
+    }
+  }
+
+  async function capturePayment() {
+    if (!selection) return;
+    const result = await run("capture", () => api(`/api/demo/merchant/capture/${selection.purchaseId}`, { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice(`Order filled. ${selection.merchant} received US$${selection.selected.amount} from the mock payment method.`);
+    }
+  }
+
+  async function amendCap() {
+    const state = await run("amend", () => api("/api/demo/mandate/price-cap", {
+      method: "POST",
+      body: JSON.stringify({ maxUnitPrice: liveCap }),
+    }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Live fare cap amended to US$${liveCap}. Existing uncaptured authorizations are no longer current.`);
+    }
+  }
+
+  async function revokeMandate() {
+    const state = await run("revoke", () => api("/api/demo/mandate/revoke", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice("Mandate revoked on-chain. Every later authorization and unused capture must fail.");
+    }
+  }
+
+  async function outsideMandateTrial() {
+    const result = await run("outside", () => api("/api/demo/trial/outside-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice(`Correctly rejected an out-of-limit US$${result.attemptedUnitPrice} fare before authorization.`);
+    }
+  }
+
+  async function revokedMandateTrial() {
+    const result = await run("revoked", () => api("/api/demo/trial/revoked-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice("Correctly rejected the post-revocation purchase attempt. No money moved.");
+    }
+  }
+
+  async function impersonatedAgentTrial() {
+    const result = await run("imposter", () => api("/api/demo/trial/impersonated-agent", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice("Correctly rejected a non-delegated wallet, even with a merchant-signed quote.");
+    }
+  }
+
+  async function expiredMandateTrial() {
+    const result = await run("expired", () => api("/api/demo/trial/expired-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setVerification(null);
+      setNotice("The local clock passed the signed validity date; the purchase was correctly rejected.");
+    }
+  }
+
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-inner">
-          <span className="brand">
-            <span className="brand-name">chk! <span>Buyer</span></span>
-          </span>
-          <span className="header-tag">Agentic purchase demo · mock chain, mock USD</span>
-        </div>
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand"><span>chk!</span> Buyer</div>
+        <p>Agentic flight purchase demo <i>mock chain + mock USD</i></p>
+        <button className="quiet-button" onClick={startDemo} disabled={Boolean(busy)}>
+          <RefreshCw size={14} className={busy === "reset" ? "spin" : ""} />
+          {demo ? "Reset demo" : "Start demo"}
+        </button>
       </header>
-      <main className="main">
-        <LiveDemoPage />
+
+      <main className="demo-grid">
+        <section className="chat-pane" aria-label="Chk Buyer chat">
+          <div className="pane-heading">
+            <div><Bot size={18} /><span><strong>chk! Buyer</strong><small>flight mandate agent</small></span></div>
+            <span className={`live-dot ${demo ? "on" : ""}`}>{demo ? "LIVE" : "READY"}</span>
+          </div>
+
+          <div className="chat-scroll" ref={chatRef}>
+            {!demo && (
+              <EmptyState onStart={startDemo} busy={Boolean(busy)} />
+            )}
+
+            {demo && !hasKyc && (
+              <section className="kyc-card login-card">
+                <div className="section-label"><ShieldCheck size={14} /> Step 1 - mock KYC and payment token</div>
+                <p>Sign in as the demo buyer to enroll a tokenized mock payment method. No card number, bank account, or real funds are used.</p>
+                <div className="login-row">
+                  <span><strong>{buyer.name}</strong><small>{buyer.email} &middot; {buyer.company}</small></span>
+                  <button className="primary-button" onClick={verifyBuyer} disabled={Boolean(busy)}>
+                    <ShieldCheck size={15} /> {busy === "kyc" ? "Signing in..." : "Sign in"}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {demo && flight?.conversation.map((message, index) => (
+              <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
+                <span>{message.role === "user" ? demo.buyer.name : "chk! Buyer"}</span>
+                <p>{message.content}</p>
+              </article>
+            ))}
+
+            {busy === "chat" && <article className="message assistant pending"><span>chk! Buyer</span><p>Reading your request...</p></article>}
+
+            {flight?.clarification && !busy && <ClarificationCard clarification={flight.clarification} />}
+
+            {draft && (
+              <button className={`mandate-strip ${draft.status}`} onClick={() => setMandateOpen((open) => !open)}>
+                <FileSignature size={15} />
+                <span><strong>{mandateLabel(draft)}</strong><small>{draft.productName || "Flight request"}</small></span>
+                <ChevronDown size={16} className={mandateOpen ? "up" : ""} />
+              </button>
+            )}
+
+            {draft && mandateOpen && (
+              <MandateMenu
+                draft={draft}
+                form={draftForm}
+                editable={isEditable}
+                reviewed={isReviewed}
+                signed={isSigned}
+                busy={busy}
+                onChange={updateDraftField}
+                onSave={saveDraft}
+                onConfirm={confirmDraft}
+                onSign={signMandate}
+                onEditReviewed={() => setEditingReviewedDraft(true)}
+              />
+            )}
+          </div>
+
+          <form className="composer" onSubmit={sendMessage}>
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={onComposerKey}
+              placeholder={demo ? "Type a request - Enter sends, Shift+Enter adds a line" : "Start the demo first"}
+              disabled={!demo || Boolean(busy)}
+              rows="2"
+            />
+            <button className="send-button" disabled={!demo || !prompt.trim() || Boolean(busy)} aria-label="Send message"><Send size={17} /></button>
+          </form>
+          {scriptPrompt
+            ? <p className="composer-tip script-tip"><kbd>Tab</kbd> fills: &ldquo;{scriptPrompt}&rdquo;</p>
+            : <p className="composer-tip">The agent may search and compare from chat alone. Booking needs a mandate you reviewed and signed.</p>}
+        </section>
+
+        <section className="operations-pane" aria-label="Merchant and audit showcase">
+          <div className="ops-heading">
+            <div><Plane size={19} /><span><strong>Flight operations</strong><small>mock web scraping + merchant verification</small></span></div>
+            {demo?.mandate && <span className={`mandate-status ${demo.mandate.status.toLowerCase()}`}>{demo.mandate.status}</span>}
+          </div>
+
+          {!demo ? <OperationsEmpty /> : <>
+            <WalletRow demo={demo} />
+            <AgentSuggestion suggestion={flight?.suggestion} />
+            <SearchPanel
+              flight={flight}
+              signed={isSigned}
+              active={activeMandate}
+              busy={busy}
+              onSearch={searchFlights}
+            />
+            <MerchantPanel
+              selection={selection}
+              verification={verification}
+              busy={busy}
+              onVerify={verifyMerchant}
+              onCapture={capturePayment}
+              active={activeMandate}
+            />
+            <TrialByFire
+              active={activeMandate}
+              mandate={demo.mandate}
+              selection={selection}
+              liveCap={liveCap}
+              onCapChange={setLiveCap}
+              onAmend={amendCap}
+              onOutside={outsideMandateTrial}
+              onImposter={impersonatedAgentTrial}
+              onExpired={expiredMandateTrial}
+              onRevoke={revokeMandate}
+              onRevoked={revokedMandateTrial}
+              busy={busy}
+              trial={flight?.trial}
+            />
+            {flight?.lastReport && <DecisionReport report={flight.lastReport} />}
+            <AuditTrail audit={demo.audit} />
+          </>}
+          <p className={`notice ${notice ? "show" : ""}`}>{notice}</p>
+        </section>
       </main>
     </div>
   );
 }
 
-async function demoRequest(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "The operation could not be completed.");
-  return payload;
+function blankDraft() {
+  return { productName: "", origin: "", destination: "", departureDate: "", authorizationExpiresAt: "", seller: "", quantity: "1", budget: "", cabin: "Economy", maxStops: "0" };
 }
 
-function LiveDemoPage() {
-  const [demo, setDemo] = useState(null);
-  const [purchaseId, setPurchaseId] = useState(null);
-  const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState("Start the demo, then introduce a buyer at the KYC desk.");
-  const [buyer, setBuyer] = useState({ name: "Marta Ruiz", email: "marta@ruizstudio.demo", company: "Ruiz Studio" });
-  const [intentMessage, setIntentMessage] = useState("");
-  const [draftForm, setDraftForm] = useState({ productId: "", quantity: "1", maxUnitPrice: "", budget: "" });
-  const [mandateOpen, setMandateOpen] = useState(false);
+function toForm(draft) {
+  return {
+    productName: draft.productName ?? "",
+    origin: draft.origin ?? "",
+    destination: draft.destination ?? "",
+    departureDate: draft.departureDate ?? "",
+    authorizationExpiresAt: draft.authorizationExpiresAt ?? "",
+    seller: draft.seller ?? "",
+    quantity: String(draft.quantity ?? 1),
+    budget: draft.budget ?? "",
+    cabin: draft.cabin ?? "Economy",
+    maxStops: String(draft.maxStops ?? 0),
+  };
+}
 
-  const draft = demo?.marketplace?.draft;
-  const chatMessages = demo?.marketplace?.conversation ?? [];
-  const scrollerRef = useRef(null);
-  const lastDraftStamp = useRef(null);
+function mandateLabel(draft) {
+  if (draft.status === "needs_input") return "Mandate draft needs your input";
+  if (draft.status === "ready") return `Draft v${draft.revision} - ready to review`;
+  if (draft.status === "reviewed") return `Draft v${draft.revision} - confirmed, not signed`;
+  if (draft.status === "signed") return `Mandate #${draft.signing?.mandateId ?? "live"} - signed on chain`;
+  if (draft.status === "revoked") return "Mandate revoked";
+  return "Mandate draft";
+}
 
-  useEffect(() => {
-    if (!demo) return undefined;
-    const refresh = setInterval(() => {
-      demoRequest("/api/demo/state").then(setDemo).catch(() => {});
-    }, 1500);
-    return () => clearInterval(refresh);
-  }, [Boolean(demo)]);
+function EmptyState({ onStart, busy }) {
+  return <div className="empty-state"><Bot size={28} /><h1>Safe purchases start with a mandate.</h1><p>Run a complete human &rarr; agent &rarr; merchant &rarr; capture flow with deterministic flight quotes and a local blockchain.</p><button className="primary-button" onClick={onStart} disabled={busy}><RefreshCw size={15} /> Start local live demo</button></div>;
+}
 
-  // El chat siempre mira el último mensaje. Sin esto, la respuesta del agente
-  // aparece fuera de pantalla y el humano cree que no pasó nada.
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  }, [chatMessages.length, action, draft?.revision, draft?.status]);
+/**
+ * Why the derived cap is not showing yet.
+ *
+ * The cap depends on the budget and the ticket count and on nothing else, so
+ * this must not blame a field it does not use. Saying "waiting for budget" over
+ * an entered budget is what made the form look like it was rejecting a valid
+ * one, while the field actually blocking the signature sat elsewhere.
+ */
+function unitCapPending(draft) {
+  const tickets = Number(draft.quantity);
+  const needsBudget = !String(draft.budget ?? "").trim();
+  const needsTickets = !Number.isInteger(tickets) || tickets < 1;
+  if (needsBudget && needsTickets) return "Waiting for budget and tickets";
+  if (needsBudget) return "Waiting for budget";
+  if (needsTickets) return "Waiting for ticket count";
+  return "Budget must be a positive USD amount";
+}
 
-  useEffect(() => {
-    if (!draft) return;
-    setDraftForm({
-      productId: draft.productId ?? "",
-      quantity: String(draft.quantity ?? 1),
-      maxUnitPrice: draft.maxUnitPrice ?? "",
-      budget: draft.budget ?? "",
-    });
-  }, [draft?.id, draft?.revision, draft?.status]);
-
-  /**
-   * El panel del mandato se abre solo cuando el agente lo crea o lo cambia.
-   * Que el humano tenga que ir a buscar lo que acaba de cambiar es la forma
-   * más fácil de que firme algo que no miró.
-   */
-  useEffect(() => {
-    if (!draft) {
-      lastDraftStamp.current = null;
-      return;
-    }
-    const stamp = `${draft.id}:${draft.revision}:${draft.status}`;
-    if (lastDraftStamp.current !== stamp) {
-      lastDraftStamp.current = stamp;
-      if (draft.status !== "needs_input") setMandateOpen(true);
-    }
-  }, [draft?.id, draft?.revision, draft?.status]);
-
-  async function startDemo() {
-    setAction("start");
-    setNotice("");
-    setPurchaseId(null);
-    setMandateOpen(false);
-    try {
-      const state = await demoRequest("/api/demo/reset", { method: "POST", body: JSON.stringify({}) });
-      setDemo(state);
-      setNotice(`Local chain and three mock wallets ready in block ${state.network.latestBlock}.`);
-    } catch (error) {
-      setNotice(`Backend unavailable: ${error.message}`);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function completeKycLogin() {
-    setAction("kyc");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/kyc/login", { method: "POST", body: JSON.stringify(buyer) });
-      setDemo(state);
-      setNotice(`${state.buyer.name} is KYC-verified. Payment token ready; no money moved.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function submitIntent(event) {
-    event.preventDefault();
-    const prompt = intentMessage.trim();
-    if (!prompt) return;
-    setAction("intent");
-    setNotice("");
-    try {
-      const result = await demoRequest("/api/demo/agent/intent", {
-        method: "POST",
-        body: JSON.stringify({ prompt }),
-      });
-      setDemo(result.state);
-      if (!result.state.marketplace.selection) setPurchaseId(null);
-      setIntentMessage("");
-      const nextDraft = result.draft ?? result.intent;
-      setNotice(nextDraft.status === "ready"
-        ? `Draft v${nextDraft.revision} ready for review. It is not a payment authorization.`
-        : nextDraft.reply);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function applyDraftEdits(event) {
-    event.preventDefault();
-    setAction("edit-draft");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate/draft", {
-        method: "PATCH",
-        body: JSON.stringify({
-          productId: draftForm.productId,
-          quantity: Number(draftForm.quantity),
-          maxUnitPrice: draftForm.maxUnitPrice,
-          budget: draftForm.budget,
-        }),
-      });
-      setDemo(state);
-      setNotice(`Draft v${state.marketplace.draft.revision} updated. Review it before confirming.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function confirmDraft() {
-    setAction("confirm-draft");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate/draft/confirm", { method: "POST" });
-      setDemo(state);
-      setNotice(`Draft v${state.marketplace.draft.revision} confirmed. Signing is still a separate action.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function createMandate() {
-    setAction("mandate");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate", { method: "POST", body: JSON.stringify({}) });
-      setDemo(state);
-      const signing = state.marketplace.signedMandate;
-      setNotice(`Mandate signed to the local chain in block ${signing.blockNumber}.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function compareAndAuthorize() {
-    setAction("compare");
-    setNotice("");
-    try {
-      const result = await demoRequest("/api/demo/agent/compare-and-authorize", { method: "POST" });
-      setDemo(result.state);
-      if (result.status === "authorized") {
-        setPurchaseId(result.purchaseId);
-        setNotice(`Agent selected ${result.selection.merchant}. Checkout authorized; the buyer has not been charged.`);
-      } else {
-        setPurchaseId(null);
-        setNotice(result.report.recommendation);
-      }
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function reopenDraft() {
-    setAction("reopen-draft");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate/draft/reopen", { method: "POST" });
-      setDemo(state);
-      setMandateOpen(true);
-      setNotice(`Previous mandate revoked without payment. Draft v${state.marketplace.draft.revision} is editable.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function revokeMandate() {
-    setAction("revoke");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate/revoke", { method: "POST" });
-      setDemo(state);
-      setPurchaseId(null);
-      setNotice("Mandate revoked on chain. Every later authorization must now fail.");
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function amendPriceCap() {
-    const next = draftForm.maxUnitPrice;
-    setAction("price-cap");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate/price-cap", {
-        method: "POST",
-        body: JSON.stringify({ maxUnitPrice: next }),
-      });
-      setDemo(state);
-      setNotice(`Unit cap lowered to US$${next}. Credentials issued under the old terms are now invalid.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function validateAndCapture() {
-    const activePurchaseId = demo?.marketplace?.selection?.purchaseId ?? purchaseId;
-    if (!activePurchaseId) return;
-    setAction("settle");
-    setNotice("");
-    try {
-      const verificationResult = await demoRequest(`/api/demo/merchant/verify/${activePurchaseId}`);
-      if (!verificationResult.verified) {
-        const failed = Object.entries(verificationResult.checks)
-          .filter(([, passed]) => !passed)
-          .map(([name]) => name.replace(/([A-Z])/g, " $1").toLowerCase());
-        setNotice(`Merchant verification failed (${failed.join(", ")}). Payment was not captured.`);
-        return;
-      }
-      const result = await demoRequest(`/api/demo/merchant/capture/${activePurchaseId}`, { method: "POST" });
-      setDemo(result.state);
-      const selected = result.state.marketplace.selection.selected;
-      setNotice(`Validated and paid. US$${selected.amount} moved to ${selected.merchant}.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  const balances = demo?.balances || { buyer: "—", merchant: "—", alternateMerchant: "—" };
-  const selection = demo?.marketplace?.selection;
-  const agent = demo?.marketplace?.agent;
-  const marketSearch = demo?.marketplace?.marketSearch;
-  const report = demo?.marketplace?.lastReport;
-  const draftReady = draft?.status === "ready";
-  const draftReviewed = draft?.status === "reviewed";
-  const draftSigned = draft?.status === "signed";
-  const hasKycPayment = Boolean(demo?.kyc?.captureReady);
-  const isAuthorized = selection?.status === "Authorized";
-  const isCaptured = selection?.status === "Settled";
-  const selectedMerchant = selection?.merchant;
-  const currentProduct = demo?.marketplace?.catalog?.find((product) => product.id === draft?.productId);
-  const busy = action !== null;
-
-  const mandateStage = !draft
-    ? "No draft yet"
-    : draft.status === "needs_input"
-      ? "Waiting on your answer"
-      : draft.status === "needs_revision"
-        ? "No safe match"
-        : draft.status === "agent_error"
-          ? "Agent unavailable"
-          : draftSigned
-            ? `Signed · mandate #${draft.signing?.mandateId ?? "?"}`
-            : draftReviewed
-              ? `Confirmed · v${draft.revision}`
-              : `Draft v${draft.revision}`;
-
-  const drawerAvailable = Boolean(draft) && draft.status !== "needs_input";
-
+function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, onSave, onConfirm, onSign, onEditReviewed }) {
+  const missing = draft.questions ?? [];
   return (
-    <section className="workspace">
-      {/* ---------------------------------------------------- chat, left half */}
-      <section className="chat-pane">
-        <header className="chat-pane-head">
-          <div>
-            <strong>chk! Buyer</strong>
-            <span>{agent?.mode ?? "offline"}{agent?.model ? ` · ${agent.model}` : ""}</span>
-          </div>
-          <button className="ghost-button" onClick={startDemo} disabled={busy}>
-            <RefreshCw size={14} /> {action === "start" ? "Starting…" : demo ? "Reset" : "Start"}
-          </button>
-        </header>
+    <section className="mandate-menu">
+      <div className="menu-heading"><div><span className="section-label"><FileSignature size={14} /> Human validation menu</span><h2>Flight purchase mandate</h2></div><span className={`draft-pill ${draft.status}`}>{draft.status.replace("_", " ")}</span></div>
+      {missing.length > 0 && <div className="required-note"><AlertTriangle size={15} /><span><strong>Before this can be signed:</strong> {missing.map((question) => question.question).join(" ")}</span></div>}
 
-        <div className="chat-scroll" ref={scrollerRef}>
-          {!demo && (
-            <div className="chat-empty">
-              <Bot size={22} />
-              <p>Start the demo to create the buyer and seller wallets on a local chain.</p>
-              <button className="primary-button" onClick={startDemo} disabled={busy}>Start live wallets</button>
-            </div>
-          )}
+      <form className="mandate-form" onSubmit={onSave}>
+        <label className="wide">Product name / free-text flight request
+          <textarea value={form.productName} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("productName", event.target.value)} placeholder="Flight from Buenos Aires to Cordoba on 2026-09-15" rows="2" />
+          <small>This is a string, not a catalog selector. The mock scraper uses it to start its search.</small>
+        </label>
+        <label>Budget (US$)<input value={form.budget} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("budget", event.target.value)} inputMode="decimal" placeholder="e.g. 300" />
+          <small>Total for every ticket. The per-ticket cap below is this divided by the ticket count.</small>
+        </label>
+        <label>Seller / airline<input value={form.seller} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("seller", event.target.value)} placeholder="e.g. Any airline" />
+          <small>Exactly &ldquo;Any airline&rdquo; allows every carrier. Anything else is enforced as that one airline.</small>
+        </label>
+        <label>Units / tickets<input value={form.quantity} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("quantity", event.target.value)} inputMode="numeric" /></label>
+        <label>Departure date<input type="date" value={form.departureDate} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("departureDate", event.target.value)} /></label>
+        <label>Mandate valid through<input type="date" value={form.authorizationExpiresAt} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("authorizationExpiresAt", event.target.value)} /></label>
+        <label>Origin<input value={form.origin} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("origin", event.target.value)} /></label>
+        <label>Destination<input value={form.destination} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("destination", event.target.value)} /></label>
+        <label>Cabin<input value={form.cabin} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("cabin", event.target.value)} /></label>
+        <label>Max stops<input type="number" min="0" max="2" value={form.maxStops} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("maxStops", event.target.value)} /></label>
+        {editable && <button className="secondary-button wide" disabled={Boolean(busy)}><CheckCircle2 size={15} /> {busy === "draft" ? "Updating..." : "Save mandate fields"}</button>}
+      </form>
 
-          {demo && !hasKycPayment && (
-            <div className="chat-kyc">
-              <p>Introduce the buyer for mock KYC. This enrolls an opaque payment token — no card number, no money moved.</p>
-              <div className="kyc-fields">
-                <input value={buyer.name} onChange={(e) => setBuyer((c) => ({ ...c, name: e.target.value }))} placeholder="Buyer name" />
-                <input value={buyer.email} onChange={(e) => setBuyer((c) => ({ ...c, email: e.target.value }))} placeholder="Business email" />
-                <input value={buyer.company} onChange={(e) => setBuyer((c) => ({ ...c, company: e.target.value }))} placeholder="Company" />
-              </div>
-              <button className="primary-button" onClick={completeKycLogin} disabled={busy}>
-                <ShieldCheck size={15} /> {action === "kyc" ? "Verifying…" : "Verify buyer"}
-              </button>
-            </div>
-          )}
+      <div className="mandate-summary">
+        <span>Derived per-ticket cap</span><strong>{draft.maxUnitPrice ? `US$${money(draft.maxUnitPrice)}` : unitCapPending(draft)}</strong>
+        <span>Authority valid through</span><strong>{draft.authorizationExpiresAt || "Waiting for your date"}</strong>
+        <span>Signed only after</span><strong>KYC token &rarr; review &rarr; explicit signature</strong>
+      </div>
 
-          {hasKycPayment && chatMessages.map((message, index) => (
-            <article className={`bubble ${message.role}`} key={`${message.role}-${index}`}>
-              <span className="bubble-who">{message.role === "user" ? demo?.buyer?.name ?? "You" : "chk! Buyer"}</span>
-              <p>{message.content}</p>
-            </article>
-          ))}
-
-          {action === "intent" && (
-            <article className="bubble assistant pending">
-              <span className="bubble-who">chk! Buyer</span>
-              <p><i>thinking…</i></p>
-            </article>
-          )}
-
-          {hasKycPayment && draft?.status === "needs_input" && (
-            <div className="chat-inline-note asking">
-              <strong>Waiting on you</strong>
-              <ul>{(draft.questions ?? []).map((q) => <li key={q.field}>{q.question}</li>)}</ul>
-              <small>Read as a <b>{draft.commitment}</b> request. No cap was guessed — nothing exists yet.</small>
-            </div>
-          )}
-
-          {hasKycPayment && draft?.status === "needs_revision" && (
-            <div className="chat-inline-note">
-              <strong>No safe match</strong>
-              <p>{draft.recommendation}</p>
-            </div>
-          )}
-
-          {hasKycPayment && draft?.status === "agent_error" && (
-            <div className="chat-inline-note error">
-              <strong>The agent could not run</strong>
-              <p>{draft.recommendation}</p>
-              <small>{draft.agentError}</small>
-            </div>
-          )}
-        </div>
-
-        {/* ------------------------------------ mandate drawer, over the chat */}
-        {drawerAvailable && (
-          <div className={`mandate-drawer ${mandateOpen ? "open" : ""}`}>
-            <button className="drawer-handle" onClick={() => setMandateOpen((open) => !open)}>
-              <FileSignature size={15} />
-              <span>{mandateStage}</span>
-              <em>{draft.quantity} × {draft.product} · US${draft.budget}</em>
-              <ChevronDown size={16} className="drawer-chevron" />
-            </button>
-
-            {mandateOpen && (
-              <div className="drawer-body">
-                {draftReady && (
-                  <form className="drawer-form" onSubmit={applyDraftEdits}>
-                    <p className="drawer-lead">
-                      Editable. Not spend authority.
-                      {draft.resolvedBy === "substitution" && " Matched by equivalence, not an exact catalog name."}
-                    </p>
-                    {draft.budgetSource?.startsWith("agent suggestion") && (
-                      <p className="drawer-warning">You did not state a cap — this is the agent's suggestion from live quotes, not a limit you authorised.</p>
-                    )}
-                    <div className="drawer-fields">
-                      <label><span>Product</span>
-                        <select value={draftForm.productId} onChange={(e) => setDraftForm((c) => ({ ...c, productId: e.target.value }))}>
-                          {demo.marketplace.catalog.map((p) => <option value={p.id} key={p.id}>{p.name}</option>)}
-                        </select>
-                      </label>
-                      <label><span>Quantity</span>
-                        <input type="number" min="1" max="20" value={draftForm.quantity} onChange={(e) => setDraftForm((c) => ({ ...c, quantity: e.target.value }))} />
-                      </label>
-                      <label><span>Max unit price</span>
-                        <input inputMode="decimal" value={draftForm.maxUnitPrice} onChange={(e) => setDraftForm((c) => ({ ...c, maxUnitPrice: e.target.value }))} />
-                      </label>
-                      <label><span>Total cap</span>
-                        <input inputMode="decimal" value={draftForm.budget} onChange={(e) => setDraftForm((c) => ({ ...c, budget: e.target.value }))} />
-                      </label>
-                    </div>
-                    <div className="drawer-policy">
-                      Approved sellers: <b>{draft.approvedSellers?.join(" · ")}</b>
-                    </div>
-                    <div className="drawer-actions">
-                      <button className="secondary-button" type="submit" disabled={busy}>
-                        <RefreshCw size={14} /> {action === "edit-draft" ? "Applying…" : "Apply edits"}
-                      </button>
-                      <button className="primary-button" type="button" onClick={confirmDraft} disabled={busy}>
-                        <CheckCircle2 size={14} /> {action === "confirm-draft" ? "Confirming…" : "Confirm terms"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {draftReviewed && (
-                  <div className="drawer-review">
-                    <p className="drawer-lead">Final review. This exact policy goes to the chain.</p>
-                    <MandateTerms draft={draft} />
-                    <div className="drawer-actions">
-                      <button className="secondary-button" onClick={reopenDraft} disabled={busy}>Back to editing</button>
-                      <button className="primary-button" onClick={createMandate} disabled={busy}>
-                        <WalletCards size={14} /> {action === "mandate" ? "Signing…" : "Sign mandate"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {draftSigned && (
-                  <div className="drawer-signed">
-                    <p className="drawer-lead">
-                      Signed in block {draft.signing?.blockNumber}. The agent may search only within these limits.
-                    </p>
-                    <MandateTerms draft={draft} />
-                    <div className="drawer-live-controls">
-                      <span>Live controls</span>
-                      <div>
-                        <input inputMode="decimal" value={draftForm.maxUnitPrice}
-                          onChange={(e) => setDraftForm((c) => ({ ...c, maxUnitPrice: e.target.value }))}
-                          aria-label="New unit cap" />
-                        <button className="secondary-button" onClick={amendPriceCap} disabled={busy}>
-                          {action === "price-cap" ? "Amending…" : "Lower cap"}
-                        </button>
-                        <button className="danger-button" onClick={revokeMandate} disabled={busy}>
-                          {action === "revoke" ? "Revoking…" : "Revoke mandate"}
-                        </button>
-                      </div>
-                      <small>Both take effect on chain immediately and invalidate unused credentials.</small>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <form className="chat-composer" onSubmit={submitIntent}>
-          <textarea
-            rows="1"
-            value={intentMessage}
-            onChange={(e) => setIntentMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitIntent(e); }
-            }}
-            placeholder={hasKycPayment ? "Tell the agent what you need…" : "Verify the buyer first"}
-            aria-label="Message the purchasing agent"
-            disabled={!hasKycPayment || busy}
-          />
-          <button type="submit" disabled={!hasKycPayment || busy || !intentMessage.trim()} aria-label="Send">
-            <Send size={16} />
-          </button>
-        </form>
-      </section>
-
-      {/* --------------------------------------------- marketplace, right half */}
-      <section className="market-pane">
-        <div className="market-wallets">
-          <article className="wallet-card buyer">
-            <div className="wallet-head"><Building2 size={14} /> BUYER <i>{demo ? "LIVE" : "OFFLINE"}</i></div>
-            <strong>US${balances.buyer}</strong>
-            <span>{demo?.buyer?.name || "No buyer yet"}</span>
-            <div className={`wallet-flag ${hasKycPayment ? "ready" : ""}`}>
-              <ShieldCheck size={12} /> {hasKycPayment ? "KYC token ready" : "KYC pending"}
-            </div>
-          </article>
-          {[{ name: "OfficeCore", balance: balances.merchant }, { name: "SupplyHub", balance: balances.alternateMerchant }].map((seller) => {
-            const quote = currentProduct?.offers.find((o) => o.merchant === seller.name);
-            return (
-              <article className={`wallet-card seller ${seller.name === selectedMerchant ? "selected" : ""}`} key={seller.name}>
-                <div className="wallet-head"><Store size={14} /> {seller.name}
-                  {seller.name === selectedMerchant && <i>{isCaptured ? "PAID" : "CHOSEN"}</i>}
-                </div>
-                <strong>US${seller.balance}</strong>
-                <span>{quote ? `${currentProduct.name} · US$${quote.unitPrice}` : "Awaiting a request"}</span>
-              </article>
-            );
-          })}
-        </div>
-
-        <div className="market-actions">
-          {draftSigned && !selection && marketSearch?.status !== "no_eligible_option" && (
-            <button className="primary-button wide" onClick={compareAndAuthorize} disabled={busy}>
-              <Bot size={15} /> {action === "compare" ? "Searching market…" : "Run agent market search"}
-            </button>
-          )}
-          {draftSigned && marketSearch?.status === "no_eligible_option" && (
-            <div className="market-blocked">
-              <p>No seller met the signed limits. Nothing was authorized and no money moved.</p>
-              <button className="secondary-button" onClick={reopenDraft} disabled={busy}>
-                <RefreshCw size={14} /> {action === "reopen-draft" ? "Reopening…" : "Revise mandate"}
-              </button>
-            </div>
-          )}
-          {isAuthorized && (
-            <button className="primary-button wide" onClick={validateAndCapture} disabled={busy}>
-              <WalletCards size={15} /> {action === "settle" ? "Validating…" : `Validate & pay US$${selection.selected.amount}`}
-            </button>
-          )}
-          {!draftSigned && !isAuthorized && (
-            <p className="market-hint">
-              {hasKycPayment ? "Sign a mandate in the chat panel before the agent can search." : "Complete KYC to begin."}
-            </p>
-          )}
-        </div>
-
-        <div className="market-catalog">
-          <div className="market-catalog-head">
-            <span><ClipboardList size={14} /> SELLER CATALOG</span>
-            <em>{demo?.marketplace?.catalog?.length || 0} products</em>
-          </div>
-          {!demo ? (
-            <p className="market-hint">Start the demo to load both catalogs.</p>
-          ) : (
-            <div className="catalog-rows">
-              <div className="catalog-row head"><span>PRODUCT</span><span>OFFICECORE</span><span>SUPPLYHUB</span><span>AGENT</span></div>
-              {demo.marketplace.catalog.map((product) => {
-                const office = product.offers.find((o) => o.merchant === "OfficeCore");
-                const supply = product.offers.find((o) => o.merchant === "SupplyHub");
-                const lowest = Number(office.unitPrice) <= Number(supply.unitPrice) ? "OfficeCore" : "SupplyHub";
-                const requested = product.id === draft?.productId;
-                return (
-                  <div className={`catalog-row ${requested ? "requested" : ""}`} key={product.id}>
-                    <span className="catalog-name">{product.name}</span>
-                    <CatalogOffer offer={office} lowest={lowest === "OfficeCore"} selected={requested && selectedMerchant === "OfficeCore"} />
-                    <CatalogOffer offer={supply} lowest={lowest === "SupplyHub"} selected={requested && selectedMerchant === "SupplyHub"} />
-                    <span className="catalog-state">
-                      {requested
-                        ? selection
-                          ? <><CheckCircle2 size={12} /> {selection.merchant}</>
-                          : draftSigned
-                            ? marketSearch?.status === "no_eligible_option" ? <><Clock3 size={12} /> rejected</> : <><Clock3 size={12} /> signed</>
-                            : <><Clock3 size={12} /> drafted</>
-                        : "—"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {report && <DecisionReport report={report} />}
-
-        <p className="market-notice"><span>{demo ? "● LIVE" : "○ READY"}</span>{notice}</p>
-      </section>
+      <div className="menu-actions">
+        {draft.status === "ready" && <button className="primary-button" onClick={onConfirm} disabled={Boolean(busy)}><BadgeCheck size={15} /> {busy === "confirm" ? "Confirming..." : "Confirm exact terms"}</button>}
+        {reviewed && !editable && <button className="secondary-button" onClick={onEditReviewed} disabled={Boolean(busy)}>Edit terms</button>}
+        {reviewed && <button className="primary-button" onClick={onSign} disabled={Boolean(busy)}><FileSignature size={15} /> {busy === "sign" ? "Signing..." : "Sign mandate on chain"}</button>}
+        {signed && <p className="signed-note"><ShieldCheck size={15} /> Mandate #{draft.signing?.mandateId} is constrained by: <code>{shortHash(draft.signing?.constraintHash)}</code></p>}
+      </div>
     </section>
   );
 }
 
-function MandateTerms({ draft }) {
+function WalletRow({ demo }) {
+  return <section className="wallet-row">
+    <article className="wallet buyer"><span>Buyer</span><strong>US${money(demo.balances.buyer)}</strong><small>{demo.buyer.name}<br />{demo.kyc.captureReady ? "KYC token ready" : "KYC pending"}</small></article>
+    {demo.flight.merchants.map((merchant) => <article className="wallet merchant" key={merchant.name}><span>{merchant.name}</span><strong>US${money(merchant.balance)}</strong><small>approved mock merchant</small></article>)}
+  </section>;
+}
+
+/**
+ * Field names as a human reads them.
+ *
+ * The agent's `field` is a path into the typed intent ("trip.departure_date",
+ * "constraints.budgetUsd"), and both the model and the code write it in their
+ * own casing. Showing that raw put "departure_date" and "budgetUsd" in front of
+ * the buyer.
+ */
+const QUESTION_LABELS = {
+  origin: "Origin",
+  destination: "Destination",
+  departuredate: "Departure date",
+  returndate: "Return date",
+  passengers: "Passengers",
+  budgetusd: "Budget",
+  budget: "Budget",
+  cabin: "Cabin",
+  maxstops: "Stops",
+  airlinepreference: "Airline",
+  airline: "Airline",
+  authorizationexpiresat: "Valid through",
+};
+
+function questionLabel(field) {
+  const key = String(field ?? "").split(".").pop();
+  const normalised = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  if (QUESTION_LABELS[normalised]) return QUESTION_LABELS[normalised];
+  const spaced = key.replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase() : "Detail";
+}
+
+/**
+ * The terms the agent had to ask for.
+ *
+ * Rendered in the chat rather than the operations pane because that is where
+ * the question was asked. An unanswered gap is the agent refusing to invent a
+ * value, so it is shown as a normal part of the conversation, not an error.
+ */
+function ClarificationCard({ clarification }) {
   return (
-    <dl className="mandate-terms">
-      <div><dt>What</dt><dd>{draft.quantity} × {draft.product}</dd></div>
-      <div><dt>Per unit</dt><dd>US${draft.maxUnitPrice}</dd></div>
-      <div><dt>Total cap</dt><dd>US${draft.budget}</dd></div>
-      <div><dt>Sellers</dt><dd>{draft.approvedSellers?.join(", ")}</dd></div>
-    </dl>
+    <section className="kyc-card clarification-card">
+      <div className="section-label"><AlertTriangle size={14} /> Missing terms</div>
+      <p>The agent would not guess these. Nothing was searched, signed, or charged.</p>
+      <dl className="clarification-list">
+        {clarification.questions.map((question) => (
+          <div key={question.field || question.question}>
+            <dt>{questionLabel(question.field)}</dt>
+            <dd>{question.question}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
+}
+
+const COMMITMENT_LABEL = {
+  committed: "booking order",
+  conditional: "conditional",
+  exploratory: "question",
+};
+
+/**
+ * What the agent would book, and what it actually did: nothing.
+ *
+ * This panel exists to make the commitment gate visible. Everything in it was
+ * produced with no mandate access and no way to move money, which is why it can
+ * be shown before anything is signed.
+ */
+function AgentSuggestion({ suggestion }) {
+  if (!suggestion) return null;
+  const { best, options, overBudget, rejected, trace, brief, commitment, detail } = suggestion;
+
+  return (
+    <section className="operations-card search-card">
+      <div className="card-heading">
+        <div><Search size={16} /><span><strong>Agent comparison</strong><small>searched and compared - authorized nothing</small></span></div>
+        <em>{COMMITMENT_LABEL[commitment] ?? commitment}</em>
+      </div>
+      <p>{detail}</p>
+
+      {best && (
+        <div className="selected-itinerary">
+          <Plane size={16} />
+          <div>
+            <strong>Would book: {best.airline} {best.quoteId}</strong>
+            <small>
+              {best.origin} to {best.destination} · {best.departureDate} {best.departureTime} ·
+              {best.stops === 0 ? " direct" : ` ${best.stops} stop(s)`} · {best.cabin} ·
+              {` ${best.passengers} passenger(s)`}
+            </small>
+          </div>
+          <b>US${money(best.totalPrice)}</b>
+        </div>
+      )}
+
+      {brief?.reference?.length > 0 && (
+        <div className="required-note">
+          <AlertTriangle size={14} />
+          <span>
+            You did not give {brief.reference.join(", ")}. The agent used a reference value to compare prices
+            and did not treat it as something you asked for. It cannot reach a mandate.
+          </span>
+        </div>
+      )}
+
+      {options?.length > 1 && (
+        <div className="offer-list">
+          {options.slice(1).map((offer) => (
+            <div className="offer eligible" key={offer.quoteId}>
+              <strong>{offer.airline}</strong>
+              <small>{offer.departureTime} · {offer.stops === 0 ? "direct" : `${offer.stops} stop(s)`} · {offer.cabin}</small>
+              <span className="offer-price">US${money(offer.totalPrice)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {overBudget?.length > 0 && (
+        <div className="offer-list">
+          {overBudget.map((offer) => (
+            <div className="offer rejected" key={offer.quoteId}>
+              <strong>{offer.airline}</strong>
+              <small>over the cap you gave</small>
+              <span className="offer-price">US${money(offer.totalPrice)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rejected?.length > 0 && (
+        <div className="offer-list">
+          {rejected.map((offer) => (
+            <div className="offer rejected" key={offer.quoteId}>
+              <strong>{offer.airline} {offer.quoteId}</strong>
+              <small>{offer.differences.map((difference) => `${difference.term}: asked ${difference.requested}, offered ${difference.offered}`).join("; ")}</small>
+              <p>{offer.verdict?.reason ?? "Did not match a term you gave."}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ul className="scrape-trace">
+        {trace.map((step) => (
+          <li key={`${step.source}-${step.detail}`}><span>{step.status}</span>{step.detail}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SearchPanel({ flight, signed, active, busy, onSearch }) {
+  const offers = flight?.search?.offers ?? [];
+  return <section className="operations-card search-card">
+    <div className="card-heading"><div><Search size={17} /><span><strong>Agent flight search</strong><small>Mock web scraper + deterministic policy filter</small></span></div>{flight?.search?.status && <em>{flight.search.status.replaceAll("_", " ")}</em>}</div>
+    {signed && active && !flight?.selection && <button className="primary-button wide" onClick={onSearch} disabled={Boolean(busy)}><Plane size={15} /> {busy === "search" ? "Searching offers..." : "Search and authorize cheapest eligible flight"}</button>}
+    {!signed && <p>Sign the human-reviewed mandate before search can create an authorization.</p>}
+    {flight?.search?.trace?.length > 0 && <ul className="scrape-trace">{flight.search.trace.map((step) => <li key={step.source}><span>{step.status}</span>{step.detail}</li>)}</ul>}
+    {offers.length > 0 && <div className="offer-list">{offers.map((offer) => <article className={`offer ${offer.eligible ? "eligible" : "rejected"}`} key={offer.quoteId}><div><strong>{offer.airline}</strong><small>{offer.merchant} · {offer.quoteId}</small></div><div><span>{offer.departureTime} - {offer.arrivalTime}</span><small>{offer.route} · {offer.stops === 0 ? "nonstop" : `${offer.stops} stop(s)`}</small></div><div className="offer-price"><strong>US${money(offer.amount)}</strong><small>US${money(offer.unitPrice)} / ticket</small></div><p>{offer.eligible ? "Eligible under signed terms" : offer.rejectionReasons.join(" ")}</p></article>)}</div>}
+  </section>;
+}
+
+function MerchantPanel({ selection, verification, busy, onVerify, onCapture, active }) {
+  if (!selection) return <section className="operations-card merchant-card muted"><div className="card-heading"><div><ShieldCheck size={17} /><span><strong>Merchant verification</strong><small>VuelaYa/SkyLink independently reads the mandate before capture</small></span></div></div><p>Awaiting a mandate-bound flight quote.</p></section>;
+  const settled = selection.status === "Settled";
+  return <section className="operations-card merchant-card">
+    <div className="card-heading"><div><ShieldCheck size={17} /><span><strong>{selection.merchant} merchant desk</strong><small>Quote {selection.orderReference} · mandate #{selection.mandateId}</small></span></div><em className={settled ? "settled" : "authorized"}>{selection.status}</em></div>
+    <div className="selected-itinerary"><Plane size={19} /><div><strong>{selection.selected.airline} · {selection.selected.route}</strong><small>{selection.selected.departureDate} · {selection.selected.departureTime} - {selection.selected.arrivalTime} · {selection.selected.cabin}</small></div><b>US${money(selection.selected.amount)}</b></div>
+    {!settled && <div className="merchant-actions"><button className="secondary-button" onClick={onVerify} disabled={Boolean(busy)}><ShieldCheck size={15} /> {busy === "verify" ? "Verifying..." : "Verify mandate on chain"}</button>{verification?.verified && active && <button className="primary-button" onClick={onCapture} disabled={Boolean(busy)}><WalletCards size={15} /> {busy === "capture" ? "Capturing..." : "Fill order & capture mock payment"}</button>}</div>}
+    {verification && <VerificationChecks verification={verification} />}
+  </section>;
+}
+
+function VerificationChecks({ verification }) {
+  return <div className={`verification ${verification.verified ? "passed" : "failed"}`}><strong>{verification.verified ? "Verification passed" : "Verification blocked capture"}</strong><div>{Object.entries(verification.checks).map(([name, passed]) => <span key={name} className={passed ? "pass" : "fail"}>{passed ? "✓" : "×"} {readable(name)}</span>)}</div></div>;
+}
+
+function TrialByFire({ active, mandate, selection, liveCap, onCapChange, onAmend, onOutside, onImposter, onExpired, onRevoke, onRevoked, busy, trial }) {
+  const revoked = mandate?.status === "Revoked";
+  const expired = mandate?.status === "Expired";
+  return <section className="operations-card trial-card">
+    <div className="card-heading"><div><AlertTriangle size={17} /><span><strong>Trial by fire</strong><small>Show judges that unsafe paths fail loudly and leave no charge behind.</small></span></div></div>
+    {active && <div className="trial-actions"><button className="danger-button" onClick={onOutside} disabled={Boolean(busy)}><Ban size={15} /> {busy === "outside" ? "Testing..." : "Try $150-over-cap flight"}</button><button className="danger-button" onClick={onImposter} disabled={Boolean(busy)}><Ban size={15} /> {busy === "imposter" ? "Testing..." : "Try impersonated agent"}</button><button className="danger-button" onClick={onExpired} disabled={Boolean(busy)}><Ban size={15} /> {busy === "expired" ? "Expiring..." : "Expire local mandate"}</button><button className="danger-button" onClick={onRevoke} disabled={Boolean(busy)}><Ban size={15} /> {busy === "revoke" ? "Revoking..." : "Revoke mandate live"}</button>{selection?.status === "Authorized" && <label className="cap-control">Live ticket cap<input value={liveCap} onChange={(event) => onCapChange(event.target.value)} disabled={Boolean(busy)} /><button className="quiet-button" type="button" onClick={onAmend} disabled={Boolean(busy)}>Apply cap</button></label>}</div>}
+    {revoked && <button className="danger-button" onClick={onRevoked} disabled={Boolean(busy)}><Ban size={15} /> {busy === "revoked" ? "Testing..." : "Try a flight after revocation"}</button>}
+    {expired && <p className="trial-result"><CheckCircle2 size={15} /> The local clock is beyond the signed validity date. Further search, authorization, and capture are blocked.</p>}
+    {trial && <p className="trial-result"><CheckCircle2 size={15} /> <strong>Rejected as intended:</strong> {trial.reason}</p>}
+  </section>;
 }
 
 function DecisionReport({ report }) {
-  const offers = report.decision?.offers ?? [];
-  const settlement = report.settlement;
-  const status = report.status === "settled" ? "SETTLED" : report.status === "not_executed" ? "NOT EXECUTED" : "AWAITING CAPTURE";
+  return <section className={`operations-card decision-report ${report.status}`}>
+    <div className="card-heading"><div><ClipboardList size={17} /><span><strong>{report.title}</strong><small>{report.summary}</small></span></div></div>
+    <div className="report-grid"><div><span>Mandate</span><strong>{report.draft?.route}</strong><small>{report.draft?.tickets} ticket(s) · US${money(report.draft?.totalBudget)} total cap</small></div><div><span>Decision</span><strong>{report.decision?.selectedMerchant ?? "No eligible seller"}</strong><small>{report.decision?.rationale}</small></div><div><span>Authorization</span><strong>{report.authorization ? "On-chain quote bound" : "None created"}</strong><small>{report.authorization ? shortHash(report.authorization.checkoutHash) : "No mock USD moved"}</small></div></div>
+    {report.settlement && <div className="settlement"><strong>Settlement complete: US${money(report.settlement.amount)}</strong>{Object.entries(report.settlement.balances).map(([wallet, movement]) => <span key={wallet}>{wallet}: {movement.before} &rarr; {movement.after} ({movement.delta})</span>)}</div>}
+  </section>;
+}
+
+/**
+ * The latest step, with the rest one click away.
+ *
+ * The full trail is the point of the demo, but printing every entry pushed the
+ * operations pane past a screen and buried whatever just happened. The newest
+ * entry is what an operator is actually looking at.
+ */
+function AuditTrail({ audit }) {
+  const [expanded, setExpanded] = useState(false);
+  const entries = audit.slice().reverse();
+  if (entries.length === 0) return null;
+  const shown = expanded ? entries : entries.slice(0, 1);
 
   return (
-    <section className={`decision-report ${report.status}`}>
-      <div className="decision-report-heading">
-        <div><span className="simple-window-label"><ClipboardList size={14} /> DECISION & TRANSACTION REPORT</span><h2>{report.title}</h2><p>{report.summary}</p></div>
-        <span>{status}</span>
+    <section className="operations-card audit-card">
+      <div className="card-heading">
+        <div><ClipboardList size={17} /><span><strong>Auditor trail</strong><small>{entries.length} recorded step(s). Every decision, contract event, verification and capture.</small></span></div>
+        {entries.length > 1 && (
+          <button className="quiet-button" type="button" onClick={() => setExpanded((open) => !open)}>
+            {expanded ? "Latest only" : `Show all ${entries.length}`}
+          </button>
+        )}
       </div>
-      <div className="report-grid">
-        <article><small>MANDATE POLICY</small><strong>{report.draft?.quantity} × {report.draft?.product ?? "No product"}</strong><p>Up to US${report.draft?.unitPriceCap ?? "—"} per unit · US${report.draft?.totalBudget ?? "—"} total</p></article>
-        <article><small>AGENT</small><strong>{report.agent?.mode ?? "Catalog decision"}</strong><p>{report.agent?.model ?? "Policy engine"}</p></article>
-        <article><small>DECISION</small><strong>{report.decision?.selectedMerchant ?? "No seller selected"}</strong><p>{report.decision?.rationale}</p></article>
-        <article><small>AUTHORIZATION</small><strong>{report.authorization ? "Merchant quote bound" : "None created"}</strong><p>{report.authorization ? "Seller verification required before settlement." : report.recommendation}</p></article>
-      </div>
-      {offers.length > 0 && (
-        <div className="report-offers">
-          <div className="report-offer-head"><span>SELLER</span><span>UNIT</span><span>TOTAL</span><span>DECISION</span></div>
-          {offers.map((offer) => (
-            <article key={offer.merchant} className={offer.merchant === report.decision?.selectedMerchant ? "chosen" : ""}>
-              <strong>{offer.merchant}</strong><span>US${offer.unitPrice}</span><span>US${offer.amount}</span>
-              <span>{offer.eligible ? "Eligible" : offer.rejectionReasons?.join(" ")}</span>
-            </article>
-          ))}
-        </div>
-      )}
-      {report.verification && (
-        <div className="report-verification">
-          <strong>Merchant verification: {report.verification.verified ? "passed" : "failed"}</strong>
-          <div>{Object.entries(report.verification.checks).map(([name, passed]) => (
-            <span className={passed ? "pass" : "fail"} key={name}>{passed ? "✓" : "×"} {name.replace(/([A-Z])/g, " $1")}</span>
-          ))}</div>
-        </div>
-      )}
-      {settlement && (
-        <div className="report-settlement">
-          <div><span>SETTLEMENT · MOCK CHAIN</span><strong>US${settlement.amount} paid</strong></div>
-          <div className="report-balance-movements">
-            {Object.entries(settlement.balances).map(([wallet, movement]) => (
-              <span key={wallet}><b>{wallet}</b><i>{movement.before} → {movement.after}</i><em>{movement.delta}</em></span>
-            ))}
-          </div>
-        </div>
-      )}
-      <small className="report-disclaimer">Generated from the signed mandate, seller quotes, on-chain authorization, verification checks and mock-USD settlement. Never a real payment.</small>
+      <ol>
+        {shown.map((entry, index) => (
+          <li key={`${entry.type}-${index}`}>
+            <strong>{readable(entry.type)}</strong>
+            <span>{entry.detail}</span>
+            {entry.transactionHash && <code>{shortHash(entry.transactionHash)}</code>}
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
 
-function CatalogOffer({ offer, lowest, selected }) {
-  return (
-    <span className={`catalog-offer ${lowest ? "lowest" : ""} ${selected ? "selected" : ""}`}>
-      US${offer.unitPrice}
-    </span>
-  );
+function OperationsEmpty() {
+  return <div className="ops-empty"><Plane size={30} /><h2>Ready for a safe flight purchase.</h2><p>The right panel will expose the offer search, on-chain merchant verification, capture-only mock payment, and auditor record.</p></div>;
+}
+
+function readable(value) {
+  return String(value).replaceAll("_", " ").replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 export default App;

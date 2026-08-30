@@ -1,0 +1,36 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: Let's look for flights to cordoba and make a mandate\nHuman: Buenos Aires\nHuman: Two passengers",
+  "recordedAt": "2026-08-30T13:50:06.128Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "exploratory",
+    "natural_language_description": "Let's look for flights to cordoba and make a mandate Buenos Aires Two passengers",
+    "trip": {
+      "origin": "Buenos Aires",
+      "destination": "Cordoba",
+      "departure_date": null,
+      "passengers": 2,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "trip.departure_date",
+        "question": "What is the departure date for the flight to Cordoba?",
+        "options": []
+      },
+      {
+        "field": "constraints.budget_usd",
+        "question": "What is your budget for the flight to Cordoba?",
+        "options": []
+      }
+    ]
+  }
+}

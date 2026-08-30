@@ -1,0 +1,31 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: Let's book a flight to Cordoba\nHuman: From Buenos Aires. We are leaving by next week. Two passengers. 500 dollar total budget",
+  "recordedAt": "2026-08-30T13:56:54.444Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "committed",
+    "natural_language_description": "Let's book a flight to Cordoba\nFrom Buenos Aires. We are leaving by next week. Two passengers. 500 dollar total budget",
+    "trip": {
+      "origin": "Buenos Aires",
+      "destination": "Cordoba",
+      "departure_date": null,
+      "passengers": 2,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": 500,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "trip.departure_date",
+        "question": "What is the exact departure date for your flight to Cordoba?",
+        "options": []
+      }
+    ]
+  }
+}

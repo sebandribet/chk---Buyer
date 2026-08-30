@@ -1,18 +1,7 @@
-# Dependencies and generated build output
 node_modules/
 dist/
 coverage/
-out/
-cache/
-
-# Local credentials and environment configuration
-.baileys-auth/
 .env
 .env.*
 !.env.example
-
-# Local artifacts
-*.docx
-
-# Playwright MCP scratch output
-.playwright-mcp/
+.DS_Store

@@ -1,0 +1,51 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: How much is a flight to Cordoba?",
+  "recordedAt": "2026-08-30T14:07:52.590Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "exploratory",
+    "natural_language_description": "How much is a flight to Cordoba?",
+    "trip": {
+      "origin": null,
+      "destination": "Cordoba",
+      "departure_date": null,
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "trip.origin",
+        "question": "From which city are you departing?",
+        "options": []
+      },
+      {
+        "field": "trip.departure_date",
+        "question": "What is your desired departure date?",
+        "options": []
+      },
+      {
+        "field": "trip.passengers",
+        "question": "How many passengers will be traveling?",
+        "options": []
+      },
+      {
+        "field": "trip.cabin",
+        "question": "Which cabin class do you prefer?",
+        "options": [
+          "Economy",
+          "Premium Economy",
+          "Business",
+          "First"
+        ]
+      }
+    ]
+  }
+}
