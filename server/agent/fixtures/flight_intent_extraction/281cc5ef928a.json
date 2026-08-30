@@ -1,0 +1,41 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: Let's book a flight to Cordoba",
+  "recordedAt": "2026-08-30T13:55:55.236Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "committed",
+    "natural_language_description": "Let's book a flight to Cordoba",
+    "trip": {
+      "origin": null,
+      "destination": "Cordoba",
+      "departure_date": null,
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "trip.origin",
+        "question": "From which city are you departing?",
+        "options": []
+      },
+      {
+        "field": "trip.departure_date",
+        "question": "What is the departure date for your flight to Cordoba?",
+        "options": []
+      },
+      {
+        "field": "trip.passengers",
+        "question": "How many passengers will be traveling to Cordoba?",
+        "options": []
+      }
+    ]
+  }
+}

@@ -1,15 +1,7 @@
-# Dependencies and generated build output
 node_modules/
 dist/
 coverage/
-out/
-cache/
-
-# Local credentials and environment configuration
-.baileys-auth/
 .env
 .env.*
 !.env.example
-
-# Local artifacts
-*.docx
+.DS_Store

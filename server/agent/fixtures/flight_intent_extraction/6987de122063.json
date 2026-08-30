@@ -1,0 +1,31 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: How much is a flight to Santiago de Chile?",
+  "recordedAt": "2026-08-30T14:55:23.994Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "exploratory",
+    "natural_language_description": "How much is a flight to Santiago de Chile?",
+    "trip": {
+      "origin": null,
+      "destination": "Santiago",
+      "departure_date": null,
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "origin",
+        "question": "From which city will you be departing?",
+        "options": []
+      }
+    ]
+  }
+}

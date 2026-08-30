@@ -1,1293 +1,897 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  Building2,
-  Check,
+  AlertTriangle,
+  BadgeCheck,
+  Ban,
+  Bot,
   CheckCircle2,
-  ChevronRight,
+  ChevronDown,
   ClipboardList,
-  Clock3,
-  CreditCard,
-  History,
-  MessageSquare,
-  Plus,
-  QrCode,
+  FileSignature,
+  Plane,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
-  Smartphone,
-  Store,
-  Unplug,
   WalletCards,
 } from "lucide-react";
-import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisplayModels.ts";
 
-const tabs = [
-  { id: "chat", label: "Chat", icon: MessageSquare },
-  { id: "demo", label: "Live demo", icon: ShieldCheck },
-  { id: "mandates", label: "Mandatos", icon: ClipboardList },
-  { id: "history", label: "Historial", icon: History },
-  { id: "account", label: "Cuenta", icon: WalletCards },
-  { id: "whatsapp", label: "Avisos", icon: Bell },
-];
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    ...options,
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? "The demo operation failed.");
+  return payload;
+}
 
-const initialMessages = [
-  {
-    id: 1,
-    role: "user",
-    content: "Necesito reponer 20 rollos de film stretch de 500 metros cada 15 días. No quiero pagar más de $8.500 por rollo.",
-    time: "09:40",
-  },
-  {
-    id: 2,
-    role: "agent",
-    content: "Entendido. Para que vos, el agente y los proveedores trabajemos con las mismas reglas, preparé un borrador estandarizado del mandato.",
-    time: "09:41",
-  },
-  {
-    id: 3,
-    role: "agent",
-    kind: "draft",
-    time: "09:41",
-    draft: {
-      version: 4,
-      product: "Film stretch industrial",
-      specification: "50 cm x 500 m · 23 micrones",
-      quantity: "Hasta 20 rollos",
-      frequency: "Cada 15 días",
-      unitLimit: "$8.500",
-      totalLimit: "$500.000",
-      expiration: "30 sep 2026",
-      paymentMethod: "Tarjeta empresa · •••• 4242",
-    },
-  },
-];
-
-const initialMandateViews = [
-  {
-    id: "MD-001",
-    product: "Film stretch industrial",
-    description: "Rollo de 50 cm x 500 m, 23 micrones",
-    status: "Activo",
-    frequency: "Cada 15 días",
-    quantity: "Hasta 20 rollos",
-    unitPrice: 8500,
-    monthlyBudget: 500000,
-    suppliers: "PackAR y Distribuidora Centro",
-    expires: "30 sep 2026",
-    version: 3,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xA91C...4E20",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "1 ago 2026",
-    maxPerOperation: 170000,
-    spent: 291800,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
-    policyHash: "0x9f8a7c4e...13bd92a1",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Distribuidora Centro",
-    previousSupplier: "PackAR",
-    supplierReason: "12% más económico y entrega dentro de las 48 horas.",
-    lastRun: "29 ago 2026 · 10:24",
-    nextRun: "12 sep 2026 · 08:00",
-    lastCard: "•••• 4821",
-  },
-  {
-    id: "MD-002",
-    product: "Guantes de nitrilo",
-    description: "Caja x 100 unidades, talle M, sin polvo",
-    status: "Activo",
-    frequency: "Mensual",
-    quantity: "Hasta 12 cajas",
-    unitPrice: 12600,
-    monthlyBudget: 151200,
-    suppliers: "Proveeduría Norte",
-    expires: "15 oct 2026",
-    version: 2,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xB281...9C15",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "15 jul 2026",
-    maxPerOperation: 151200,
-    spent: 98400,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor", "Comprar automáticamente"],
-    policyHash: "0x4b18d620...8f31b781",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Proveeduría Norte",
-    previousSupplier: "Proveeduría Norte",
-    supplierReason: "Mantuvo el mejor equilibrio entre precio y disponibilidad.",
-    lastRun: "22 ago 2026 · 09:11",
-    nextRun: "3 sep 2026 · 08:00",
-    lastCard: "•••• 1906",
-  },
-  {
-    id: "MD-003",
-    product: "Aceite hidráulico ISO 46",
-    description: "Tambor de 20 litros, norma DIN 51524",
-    status: "Borrador",
-    frequency: "Cada 60 días",
-    quantity: "Hasta 4 tambores",
-    unitPrice: 92000,
-    monthlyBudget: 368000,
-    suppliers: "A definir",
-    expires: "30 nov 2026",
-    version: 1,
-    owner: "0x71A4...92F1",
-    agent: "chk! Buyer",
-    agentAddress: "0xA91C...4E20",
-    paymentDelegate: "VirtualCardAdapter",
-    validAfter: "Pendiente de activación",
-    maxPerOperation: 368000,
-    spent: 0,
-    reserved: 0,
-    allowedActions: ["Buscar ofertas", "Elegir proveedor"],
-    policyHash: "0x7c941d02...c4af7710",
-    account: "Cuenta operativa ARS · •••• 1842",
-    accountBalance: 1108000,
-    paymentMethod: "Tarjeta virtual de un solo uso",
-    currentSupplier: "Sin seleccionar",
-    previousSupplier: "—",
-    supplierReason: "Todavía no se ejecutó una compra.",
-    lastRun: "28 ago 2026 · 16:42",
-    nextRun: "Sin programar",
-    lastCard: "—",
-  },
-];
-
-const canonicalFixtureByMandateId = {
-  "MD-001": mandateScenarios[1].mandate,
-  "MD-002": mandateScenarios[3].mandate,
-  "MD-003": mandateScenarios[0].mandate,
+/**
+ * The rehearsed demo path, offered as a Tab completion in the composer.
+ *
+ * Every chat turn of the flow is here, including the answer to the agent's
+ * clarifying question, so the whole demo can be driven with Tab + Enter and
+ * ends in an authorized purchase.
+ *
+ * The numbers are chosen against the mock catalogue, and getting them wrong is
+ * the trap this script exists to avoid: budget is the TOTAL, so US$300 over 2
+ * tickets is a US$150 per-ticket cap, which admits the US$130, US$134 and
+ * US$149 Cordoba fares and excludes the US$189 one. A US$150 total would derive
+ * a US$75 cap and reject every fare in the catalogue.
+ *
+ * "any airline" matters too: the Seller term is a hard constraint, and only
+ * that exact phrase means "no airline restriction". Anything else - including a
+ * typo - is read as a specific carrier and matches nothing.
+ */
+const DEMO_SCRIPT = {
+  explore: "How much is a flight to Cordoba?",
+  terms: "From Buenos Aires, 2 passengers, on 2026-09-15, any airline, up to $300 total, and this mandate stays valid through 2026-09-20",
+  book: "Book it",
 };
 
-const initialMandates = initialMandateViews.map((mandate) => ({
-  ...mandate,
-  canonical: toCanonicalMandate(canonicalFixtureByMandateId[mandate.id], mandate.owner),
-}));
+/**
+ * The next thing worth typing, from demo state alone.
+ *
+ * Returns "" when the next action is not a chat turn - a ready draft is waiting
+ * on Confirm and Sign, and suggesting a prompt there points away from the
+ * button the demo actually needs.
+ */
+function nextScriptPrompt(demo) {
+  const flight = demo?.flight;
+  if (!flight) return "";
+  if (demo.mandate?.active) return flight.selection ? "" : DEMO_SCRIPT.book;
+  if (flight.draft && ["ready", "reviewed"].includes(flight.draft.status)) return "";
+  // Whatever the agent asked for, this one answer carries every term the
+  // mandate needs, so the flow never stalls on a question we did not predict.
+  if (flight.clarification) return DEMO_SCRIPT.terms;
+  if (!flight.draft) return DEMO_SCRIPT.explore;
+  return DEMO_SCRIPT.terms;
+}
 
-const purchases = [
-  {
-    id: "OC-2841",
-    date: "29 ago 2026",
-    product: "Film stretch industrial",
-    supplier: "Distribuidora Centro",
-    quantity: "20 rollos",
-    total: 142000,
-    mandate: "MD-001 · v3",
-    card: "•••• 4821",
-    transaction: "0x81c2...4f90",
-    status: "Comprada",
-  },
-  {
-    id: "OC-2827",
-    date: "22 ago 2026",
-    product: "Guantes de nitrilo",
-    supplier: "Proveeduría Norte",
-    quantity: "8 cajas",
-    total: 98400,
-    mandate: "MD-002 · v2",
-    card: "•••• 1906",
-    transaction: "0x2d19...a782",
-    status: "Comprada",
-  },
-  {
-    id: "OC-2788",
-    date: "14 ago 2026",
-    product: "Film stretch industrial",
-    supplier: "PackAR",
-    quantity: "20 rollos",
-    total: 149800,
-    mandate: "MD-001 · v2",
-    card: "•••• 7334",
-    transaction: "0x749a...118c",
-    status: "Comprada",
-  },
-];
-
-const mandateActivity = {
-  "MD-001": [
-    { time: "10:24", title: "Compra confirmada", detail: "Distribuidora Centro confirmó la orden OC-2841.", type: "success" },
-    { time: "10:23", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 4821 por $142.000, válida para un solo uso.", type: "card" },
-    { time: "10:23", title: "Autorización registrada", detail: "Transacción mock confirmada en Polygon · Demo.", type: "chain" },
-    { time: "10:22", title: "Saldo retirado", detail: "$142.000 retirados de la cuenta operativa.", type: "account" },
-    { time: "10:22", title: "Proveedor cambiado", detail: "El agente eligió Distribuidora Centro en lugar de PackAR.", type: "supplier" },
-    { time: "10:21", title: "8 ofertas encontradas", detail: "Se compararon precio, disponibilidad y entrega.", type: "search" },
-    { time: "10:20", title: "Búsqueda iniciada", detail: "Ejecución programada por cron.", type: "search" },
-  ],
-  "MD-002": [
-    { time: "09:11", title: "Compra confirmada", detail: "Proveeduría Norte confirmó la orden OC-2827.", type: "success" },
-    { time: "09:10", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 1906 por $98.400.", type: "card" },
-    { time: "09:08", title: "Búsqueda completada", detail: "Se encontraron 5 ofertas válidas.", type: "search" },
-  ],
-  "MD-003": [
-    { time: "16:42", title: "Sin ofertas válidas", detail: "Las 4 opciones encontradas superaron el precio máximo.", type: "search" },
-    { time: "16:40", title: "Búsqueda iniciada", detail: "Ejecución de prueba del borrador.", type: "search" },
-  ],
+/**
+ * What the status line says for each decision the commitment gate can reach.
+ * Keyed by kind rather than sniffing the reply text, so a reply reworded in
+ * the agent cannot silently change what the operator is told happened.
+ */
+const NOTICE_BY_KIND = {
+  clarification: "The agent is missing a term and would not guess it.",
+  suggestion: "The agent searched and compared. It authorized nothing.",
+  purchase: "The agent acted inside your signed mandate.",
+  blocked: "Your signed mandate refused that request.",
+  error: "The agent stopped rather than guess.",
 };
 
-const mandateOffers = {
-  "MD-001": [
-    { supplier: "Distribuidora Centro", unitPrice: 7100, delivery: "48 h", score: 94, result: "Elegida" },
-    { supplier: "PackAR", unitPrice: 8000, delivery: "24 h", score: 88, result: "Descartada" },
-    { supplier: "FlexPack Córdoba", unitPrice: 7480, delivery: "72 h", score: 84, result: "Descartada" },
-  ],
-  "MD-002": [
-    { supplier: "Proveeduría Norte", unitPrice: 12300, delivery: "3 días", score: 92, result: "Elegida" },
-    { supplier: "Seguridad Industrial SA", unitPrice: 12550, delivery: "5 días", score: 81, result: "Descartada" },
-  ],
-  "MD-003": [
-    { supplier: "Hidráulica Federal", unitPrice: 101500, delivery: "4 días", score: 68, result: "Fuera de límite" },
-  ],
-};
+function money(value) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+}
 
-const currency = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
+function shortHash(value) {
+  if (!value) return "-";
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
 
 function App() {
-  const [activeTab, setActiveTab] = useState("chat");
-  const [messages, setMessages] = useState(initialMessages);
-  const [draftApproved, setDraftApproved] = useState(false);
-  const [mandates, setMandates] = useState(initialMandates);
-  const [selectedMandateId, setSelectedMandateId] = useState(null);
+  const [demo, setDemo] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("Start the local demo, then chat with chk! Buyer.");
+  const [prompt, setPrompt] = useState("");
+  const [mandateOpen, setMandateOpen] = useState(false);
+  const [editingReviewedDraft, setEditingReviewedDraft] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [liveCap, setLiveCap] = useState("");
+  const [buyer] = useState({ name: "Marta Ruiz", email: "marta@chk.demo", company: "Marta Studio" });
+  const [draftForm, setDraftForm] = useState(blankDraft());
+  const chatRef = useRef(null);
 
-  function navigateToTab(tab) {
-    setActiveTab(tab);
-    setSelectedMandateId(null);
+  const flight = demo?.flight;
+  const draft = flight?.draft;
+  const selection = flight?.selection;
+  const activeMandate = Boolean(demo?.mandate?.active);
+  const isSigned = draft?.status === "signed";
+  const isReviewed = draft?.status === "reviewed";
+  const isEditable = ["needs_input", "ready"].includes(draft?.status) || editingReviewedDraft;
+  const hasKyc = Boolean(demo?.kyc?.captureReady);
+  const scriptPrompt = nextScriptPrompt(demo);
+
+  /**
+   * The operations pane reveals one card at a time, as the flow earns it.
+   *
+   * Every card rendered from the start was a screen of empty placeholders -
+   * "awaiting a quote", "sign the mandate first", two merchant wallets at
+   * US$0.00 - and a viewer had no way to tell which of them was the live one.
+   * A card appears at the moment it has something to say: search when the
+   * mandate is signed, the merchant desk when a quote is bound to one, the
+   * trials once the honest path has been shown to work.
+   *
+   * The trials also stay up once any of them has run, so a reset back to the
+   * signed phase lands the operator straight on the next one.
+   */
+  const mandateSigned = Boolean(demo?.mandate);
+  const settled = selection?.status === "Settled";
+  const showTrials = mandateSigned
+    && (settled || (flight?.trials?.length ?? 0) > 0 || !activeMandate);
+
+  useEffect(() => {
+    if (!draft) return;
+    setDraftForm(toForm(draft));
+    setLiveCap(draft.maxUnitPrice ?? "");
+    setEditingReviewedDraft(false);
+    setMandateOpen(true);
+  }, [draft?.id, draft?.revision, draft?.status]);
+
+  // Always scroll the chat down when messages, validation questions, or the
+  // mandate menu changes. The buyer never has to hunt for the agent's reply.
+  useEffect(() => {
+    const scroller = chatRef.current;
+    if (!scroller) return;
+    requestAnimationFrame(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    });
+  }, [flight?.conversation?.length, draft?.revision, draft?.status, mandateOpen, busy]);
+
+  async function run(label, work) {
+    setBusy(label);
+    setNotice("");
+    try {
+      const result = await work();
+      return result;
+    } catch (error) {
+      setNotice(error.message);
+      return null;
+    } finally {
+      setBusy("");
+    }
   }
 
-  function openMandate(mandateId) {
-    setActiveTab("mandates");
-    setSelectedMandateId(mandateId);
+  async function startDemo() {
+    const state = await run("reset", () => api("/api/demo/reset", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Local chain ready at block ${state.network.latestBlock}. No real card or money is involved.`);
+    }
+  }
+
+  async function verifyBuyer() {
+    const state = await run("kyc", () => api("/api/demo/kyc/login", {
+      method: "POST",
+      body: JSON.stringify(buyer),
+    }));
+    if (state) {
+      setDemo(state);
+      setNotice(`${state.buyer.name} is KYC-verified and an opaque mock payment token is enrolled.`);
+    }
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const text = prompt.trim();
+    if (!text || !demo) return;
+    const result = await run("chat", () => api("/api/demo/agent/intent", {
+      method: "POST",
+      body: JSON.stringify({ prompt: text }),
+    }));
+    if (result) {
+      setDemo(result.state);
+      setPrompt("");
+      setVerification(null);
+      if (result.draft) setMandateOpen(true);
+      setNotice(NOTICE_BY_KIND[result.kind] ?? result.reply);
+    }
+  }
+
+  /**
+   * Enter sends; Shift+Enter is a newline. Tab fills the next rehearsed prompt
+   * but never sends it - the demo should still show a human choosing to send.
+   */
+  function onComposerKey(event) {
+    if (event.key === "Tab" && !event.shiftKey && !prompt.trim() && scriptPrompt) {
+      event.preventDefault();
+      setPrompt(scriptPrompt);
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (prompt.trim() && !busy) sendMessage(event);
+    }
+  }
+
+  function updateDraftField(field, value) {
+    setDraftForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveDraft(event) {
+    event.preventDefault();
+    const state = await run("draft", () => api("/api/demo/mandate/draft", {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...draftForm,
+        quantity: Number(draftForm.quantity),
+        maxStops: Number(draftForm.maxStops),
+      }),
+    }));
+    if (state) {
+      setDemo(state);
+      setNotice(state.flight.draft.status === "ready"
+        ? `Draft v${state.flight.draft.revision} is ready to confirm. It still cannot spend.`
+        : "The mandate menu still needs the highlighted details.");
+    }
+  }
+
+  async function confirmDraft() {
+    const state = await run("confirm", () => api("/api/demo/mandate/draft/confirm", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setNotice("Terms confirmed. Signing remains a separate, explicit step.");
+    }
+  }
+
+  async function signMandate() {
+    const state = await run("sign", () => api("/api/demo/mandate", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setNotice(`Mandate #${state.mandate.id} is live on the mock chain.`);
+    }
+  }
+
+  /**
+   * Back to the signed mandate, without redoing KYC and the chat.
+   *
+   * Every trial by fire ends the mandate it runs against, so showing a second
+   * one meant restarting the whole demo. The audit trail deliberately survives.
+   */
+  async function resetToSigned() {
+    const state = await run("resign", () => api("/api/demo/reset-to-signed", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Back at the signed phase on mandate #${state.mandate.id}. The audit trail keeps every earlier rejection.`);
+    }
+  }
+
+  async function searchFlights() {
+    const result = await run("search", () => api("/api/demo/flight/search-and-authorize", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setVerification(null);
+      setNotice(result.status === "authorized"
+        ? `${result.selection.selected.airline} was selected. The merchant must still verify before capture.`
+        : result.report.summary);
+    }
+  }
+
+  async function verifyMerchant() {
+    if (!selection) return;
+    const result = await run("verify", () => api(`/api/demo/merchant/verify/${selection.purchaseId}`));
+    if (result) {
+      setVerification(result);
+      setNotice(result.verified
+        ? "Merchant verification passed. The one-use mock payment is eligible for capture."
+        : "Merchant verification failed. Capture is blocked and no money moved.");
+    }
+  }
+
+  async function capturePayment() {
+    if (!selection) return;
+    const result = await run("capture", () => api(`/api/demo/merchant/capture/${selection.purchaseId}`, { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice(`Order filled. ${selection.merchant} received US$${selection.selected.amount} from the mock payment method.`);
+    }
+  }
+
+  async function amendCap() {
+    const state = await run("amend", () => api("/api/demo/mandate/price-cap", {
+      method: "POST",
+      body: JSON.stringify({ maxUnitPrice: liveCap }),
+    }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice(`Live fare cap amended to US$${liveCap}. Existing uncaptured authorizations are no longer current.`);
+    }
+  }
+
+  async function revokeMandate() {
+    const state = await run("revoke", () => api("/api/demo/mandate/revoke", { method: "POST" }));
+    if (state) {
+      setDemo(state);
+      setVerification(null);
+      setNotice("Mandate revoked on-chain. Every later authorization and unused capture must fail.");
+    }
+  }
+
+  async function outsideMandateTrial() {
+    const result = await run("outside", () => api("/api/demo/trial/outside-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice(`Correctly rejected an out-of-limit US$${result.attemptedUnitPrice} fare before authorization.`);
+    }
+  }
+
+  async function revokedMandateTrial() {
+    const result = await run("revoked", () => api("/api/demo/trial/revoked-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice("Correctly rejected the post-revocation purchase attempt. No money moved.");
+    }
+  }
+
+  async function impersonatedAgentTrial() {
+    const result = await run("imposter", () => api("/api/demo/trial/impersonated-agent", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setNotice("Correctly rejected a non-delegated wallet, even with a merchant-signed quote.");
+    }
+  }
+
+  async function expiredMandateTrial() {
+    const result = await run("expired", () => api("/api/demo/trial/expired-mandate", { method: "POST" }));
+    if (result) {
+      setDemo(result.state);
+      setVerification(null);
+      setNotice("The local clock passed the signed validity date; the purchase was correctly rejected.");
+    }
   }
 
   return (
-    <div className="app">
-      <Header activeTab={activeTab} onTabChange={navigateToTab} />
-      <main className={`main ${activeTab === "chat" ? "chat-main" : ""}`}>
-        {activeTab === "chat" && (
-          <ChatPage
-            messages={messages}
-            onMessagesChange={setMessages}
-            draftApproved={draftApproved}
-            onDraftApproved={() => {
-              setDraftApproved(true);
-              setMandates((current) => current.map((item) => item.id === "MD-001" ? { ...item, version: 4 } : item));
-            }}
-            mandates={mandates}
-            onOpenMandates={() => navigateToTab("mandates")}
-            onOpenMandate={openMandate}
-          />
-        )}
-        {activeTab === "demo" && <LiveDemoPage />}
-        {activeTab === "mandates" && (
-          selectedMandateId ? (
-            <MandateDetailPage
-              mandate={mandates.find((item) => item.id === selectedMandateId)}
-              onBack={() => setSelectedMandateId(null)}
-              onRevoke={(mandateId) => setMandates((current) => current.map((item) => item.id === mandateId ? {
-                ...item,
-                status: "Revocado",
-                canonical: { ...item.canonical, status: "Revoked" },
-              } : item))}
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand"><span>chk!</span> Buyer</div>
+        <p>Agentic flight purchase demo <i>mock chain + mock USD</i></p>
+        <button className="quiet-button" onClick={startDemo} disabled={Boolean(busy)}>
+          <RefreshCw size={14} className={busy === "reset" ? "spin" : ""} />
+          {demo ? "Reset demo" : "Start demo"}
+        </button>
+      </header>
+
+      <main className="demo-grid">
+        <section className="chat-pane" aria-label="Chk Buyer chat">
+          <div className="pane-heading">
+            <div><Bot size={18} /><span><strong>chk! Buyer</strong><small>flight mandate agent</small></span></div>
+            <span className={`live-dot ${demo ? "on" : ""}`}>{demo ? "LIVE" : "READY"}</span>
+          </div>
+
+          <div className="chat-scroll" ref={chatRef}>
+            {!demo && (
+              <EmptyState onStart={startDemo} busy={Boolean(busy)} />
+            )}
+
+            {demo && !hasKyc && (
+              <section className="kyc-card login-card">
+                <div className="section-label"><ShieldCheck size={14} /> Step 1 - mock KYC and payment token</div>
+                <p>Enrolls a tokenized mock payment method. No card number and no real funds.</p>
+                <div className="login-row">
+                  <span><strong>{buyer.name}</strong><small>{buyer.email} &middot; {buyer.company}</small></span>
+                  <button className="primary-button" onClick={verifyBuyer} disabled={Boolean(busy)}>
+                    <ShieldCheck size={15} /> {busy === "kyc" ? "Signing in..." : "Sign in"}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {demo && flight?.conversation.map((message, index) => (
+              <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
+                <span>{message.role === "user" ? demo.buyer.name : "chk! Buyer"}</span>
+                <p>{message.content}</p>
+              </article>
+            ))}
+
+            {busy === "chat" && (
+              <article className="message assistant pending">
+                <span>chk! Buyer</span>
+                <p className="thinking">Thinking<i /><i /><i /></p>
+              </article>
+            )}
+
+            {flight?.clarification && !busy && <ClarificationCard clarification={flight.clarification} />}
+
+            {draft && (
+              <button className={`mandate-strip ${draft.status}`} onClick={() => setMandateOpen((open) => !open)}>
+                <FileSignature size={15} />
+                <span><strong>{mandateLabel(draft)}</strong><small>{draft.productName || "Flight request"}</small></span>
+                <ChevronDown size={16} className={mandateOpen ? "up" : ""} />
+              </button>
+            )}
+
+            {draft && mandateOpen && (
+              <MandateMenu
+                draft={draft}
+                form={draftForm}
+                editable={isEditable}
+                reviewed={isReviewed}
+                signed={isSigned}
+                busy={busy}
+                onChange={updateDraftField}
+                onSave={saveDraft}
+                onConfirm={confirmDraft}
+                onSign={signMandate}
+                onEditReviewed={() => setEditingReviewedDraft(true)}
+              />
+            )}
+          </div>
+
+          <form className="composer" onSubmit={sendMessage}>
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={onComposerKey}
+              placeholder={demo ? "Type a request - Enter sends, Shift+Enter adds a line" : "Start the demo first"}
+              disabled={!demo || Boolean(busy)}
+              rows="2"
             />
-          ) : (
-            <MandatesPage
-              onCreate={() => navigateToTab("chat")}
-              onSelect={openMandate}
-              mandates={mandates}
-            />
-          )
-        )}
-        {activeTab === "history" && <HistoryPage />}
-        {activeTab === "account" && <AccountPage />}
-        {activeTab === "whatsapp" && <WhatsappPage />}
+            <button className="send-button" disabled={!demo || !prompt.trim() || Boolean(busy)} aria-label="Send message"><Send size={17} /></button>
+          </form>
+          {scriptPrompt
+            ? <p className="composer-tip script-tip"><kbd>Tab</kbd> fills: &ldquo;{scriptPrompt}&rdquo;</p>
+            : <p className="composer-tip">Chat can search and compare. Booking needs a signed mandate.</p>}
+        </section>
+
+        <section className="operations-pane" aria-label="Merchant and audit showcase">
+          <div className="ops-heading">
+            <div><Plane size={19} /><span><strong>Flight operations</strong><small>scrape, verify, capture</small></span></div>
+            {demo?.mandate && <span className={`mandate-status ${demo.mandate.status.toLowerCase()}`}>{demo.mandate.status}</span>}
+          </div>
+
+          {!demo ? <OperationsEmpty /> : <>
+            <WalletRow demo={demo} showMerchants={Boolean(selection)} />
+            <AgentSuggestion suggestion={flight?.suggestion} />
+            {mandateSigned && (
+              <SearchPanel
+                flight={flight}
+                active={activeMandate}
+                busy={busy}
+                onSearch={searchFlights}
+              />
+            )}
+            {selection && (
+              <MerchantPanel
+                selection={selection}
+                verification={verification}
+                busy={busy}
+                onVerify={verifyMerchant}
+                onCapture={capturePayment}
+                active={activeMandate}
+              />
+            )}
+            {showTrials && (
+              <TrialByFire
+                active={activeMandate}
+                mandate={demo.mandate}
+                selection={selection}
+                liveCap={liveCap}
+                onCapChange={setLiveCap}
+                onAmend={amendCap}
+                onOutside={outsideMandateTrial}
+                onImposter={impersonatedAgentTrial}
+                onExpired={expiredMandateTrial}
+                onRevoke={revokeMandate}
+                onRevoked={revokedMandateTrial}
+                onResetSigned={resetToSigned}
+                busy={busy}
+                trial={flight?.trial}
+              />
+            )}
+            {flight?.lastReport && <DecisionReport report={flight.lastReport} />}
+            <AuditTrail audit={demo.audit} />
+          </>}
+          <p className={`notice ${notice ? "show" : ""}`}>{notice}</p>
+        </section>
       </main>
     </div>
   );
 }
 
-function Header({ activeTab, onTabChange }) {
-  return (
-    <header className="header">
-      <div className="header-inner">
-        <button className="brand" onClick={() => onTabChange("chat")}>
-          <span className="brand-name">chk! <span>Buyer</span></span>
-        </button>
-        <nav className="tabs" aria-label="Navegación principal">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                className={activeTab === tab.id ? "active" : ""}
-                onClick={() => onTabChange(tab.id)}
-              >
-                <Icon size={16} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-    </header>
-  );
+function blankDraft() {
+  return { productName: "", origin: "", destination: "", departureDate: "", authorizationExpiresAt: "", seller: "", quantity: "1", budget: "", cabin: "Economy", maxStops: "0" };
 }
 
-function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, mandates, onOpenMandates, onOpenMandate }) {
-  const [message, setMessage] = useState("");
+function toForm(draft) {
+  return {
+    productName: draft.productName ?? "",
+    origin: draft.origin ?? "",
+    destination: draft.destination ?? "",
+    departureDate: draft.departureDate ?? "",
+    authorizationExpiresAt: draft.authorizationExpiresAt ?? "",
+    seller: draft.seller ?? "",
+    quantity: String(draft.quantity ?? 1),
+    budget: draft.budget ?? "",
+    cabin: draft.cabin ?? "Economy",
+    maxStops: String(draft.maxStops ?? 0),
+  };
+}
 
-  function sendMessage(event) {
-    event.preventDefault();
-    const content = message.trim();
-    if (!content) return;
-    onMessagesChange((current) => [
-      ...current,
-      { id: crypto.randomUUID(), role: "user", content, time: "Ahora" },
-    ]);
-    setMessage("");
-  }
+function mandateLabel(draft) {
+  if (draft.status === "needs_input") return "Mandate draft needs your input";
+  if (draft.status === "ready") return `Draft v${draft.revision} - ready to review`;
+  if (draft.status === "reviewed") return `Draft v${draft.revision} - confirmed, not signed`;
+  if (draft.status === "signed") return `Mandate #${draft.signing?.mandateId ?? "live"} - signed on chain`;
+  if (draft.status === "revoked") return "Mandate revoked";
+  return "Mandate draft";
+}
 
-  function approveDraft() {
-    if (draftApproved) return;
-    onDraftApproved();
-    onMessagesChange((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "agent",
-        content: "Mandato v4 firmado y registrado en Polygon · Demo. Ya puedo comenzar con chk! it out.",
-        time: "Ahora",
-      },
-    ]);
-  }
+function EmptyState({ onStart, busy }) {
+  return <div className="empty-state"><Bot size={28} /><h1>Safe purchases start with a mandate.</h1><p>A full human &rarr; agent &rarr; merchant &rarr; capture flow on a local chain.</p><button className="primary-button" onClick={onStart} disabled={busy}><RefreshCw size={15} /> Start local live demo</button></div>;
+}
 
+/**
+ * Why the derived cap is not showing yet.
+ *
+ * The cap depends on the budget and the ticket count and on nothing else, so
+ * this must not blame a field it does not use. Saying "waiting for budget" over
+ * an entered budget is what made the form look like it was rejecting a valid
+ * one, while the field actually blocking the signature sat elsewhere.
+ */
+function unitCapPending(draft) {
+  const tickets = Number(draft.quantity);
+  const needsBudget = !String(draft.budget ?? "").trim();
+  const needsTickets = !Number.isInteger(tickets) || tickets < 1;
+  if (needsBudget && needsTickets) return "Waiting for budget and tickets";
+  if (needsBudget) return "Waiting for budget";
+  if (needsTickets) return "Waiting for ticket count";
+  return "Budget must be a positive USD amount";
+}
+
+function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, onSave, onConfirm, onSign, onEditReviewed }) {
+  const missing = draft.questions ?? [];
   return (
-    <section className="page chat-page">
-      <div className="chat-layout">
-        <aside className="mandates-overview">
-          <div className="overview-header">
-            <div>
-              <span>MANDATOS ACTIVOS</span>
-              <h2>Tus productos</h2>
-            </div>
-            <span className="overview-count">{mandates.filter((item) => item.status === "Activo").length}</span>
-          </div>
+    <section className="mandate-menu">
+      <div className="menu-heading"><span className="section-label"><FileSignature size={14} /> Human validation menu</span><span className={`draft-pill ${draft.status}`}>{draft.status.replace("_", " ")}</span></div>
+      {missing.length > 0 && <div className="required-note"><AlertTriangle size={15} /><span><strong>Before this can be signed:</strong> {missing.map((question) => question.question).join(" ")}</span></div>}
 
-          <div className="overview-list">
-            {mandates.filter((item) => item.status === "Activo").map((mandate) => (
-              <button
-                type="button"
-                className="overview-card"
-                key={mandate.id}
-                onClick={() => onOpenMandate(mandate.id)}
-              >
-                <div className="overview-card-top">
-                  <span>{mandate.id}</span>
-                  <Status value={mandate.status} />
-                </div>
-                <h3>{mandate.product}</h3>
-                <p>{mandate.description}</p>
-                <dl>
-                  <div><dt>Reposición</dt><dd>{mandate.frequency}</dd></div>
-                  <div><dt>Tope unitario</dt><dd>{currency.format(mandate.unitPrice)}</dd></div>
-                </dl>
-              </button>
-            ))}
-          </div>
+      <form className="mandate-form" onSubmit={onSave}>
+        <label className="wide">Product name / free-text flight request
+          <textarea value={form.productName} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("productName", event.target.value)} placeholder="Flight from Buenos Aires to Cordoba on 2026-09-15" rows="2" />
+        </label>
+        <label>Budget (US$)<input value={form.budget} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("budget", event.target.value)} inputMode="decimal" placeholder="e.g. 300" />
+          <small>Total for every ticket. The cap below divides it by the ticket count.</small>
+        </label>
+        <label>Seller / airline<input value={form.seller} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("seller", event.target.value)} placeholder="e.g. Any airline" />
+          <small>Exactly &ldquo;Any airline&rdquo; allows every carrier. Anything else is enforced as that carrier.</small>
+        </label>
+        <label>Units / tickets<input value={form.quantity} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("quantity", event.target.value)} inputMode="numeric" /></label>
+        <label>Departure date<input type="date" value={form.departureDate} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("departureDate", event.target.value)} /></label>
+        <label>Mandate valid through<input type="date" value={form.authorizationExpiresAt} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("authorizationExpiresAt", event.target.value)} /></label>
+        <label>Origin<input value={form.origin} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("origin", event.target.value)} /></label>
+        <label>Destination<input value={form.destination} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("destination", event.target.value)} /></label>
+        <label>Cabin<input value={form.cabin} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("cabin", event.target.value)} /></label>
+        <label>Max stops<input type="number" min="0" max="2" value={form.maxStops} disabled={!editable || Boolean(busy)} onChange={(event) => onChange("maxStops", event.target.value)} /></label>
+        {editable && <button className="secondary-button wide" disabled={Boolean(busy)}><CheckCircle2 size={15} /> {busy === "draft" ? "Updating..." : "Save mandate fields"}</button>}
+      </form>
 
-          <button className="overview-link" onClick={onOpenMandates}>
-            Ver todos los mandatos <ChevronRight size={16} />
-          </button>
-        </aside>
+      <div className="mandate-summary">
+        <span>Derived per-ticket cap</span><strong>{draft.maxUnitPrice ? `US$${money(draft.maxUnitPrice)}` : unitCapPending(draft)}</strong>
+        <span>Authority valid through</span><strong>{draft.authorizationExpiresAt || "Waiting for your date"}</strong>
+        <span>Signed only after</span><strong>KYC &rarr; review &rarr; signature</strong>
+      </div>
 
-        <div className="chat-shell">
-          <div className="chat-topbar">
-            <div><strong>chk! Buyer</strong><span>Tu agente de compras</span></div>
-          </div>
-          <div className="conversation">
-            <div className="message-list">
-              <div className="conversation-date">HOY</div>
-              {messages.map((item) => (
-                <div className={`chat-message ${item.role}`} key={item.id}>
-                  <div>
-                    {item.kind === "draft" ? (
-                      <MandateDraftCard
-                        draft={item.draft}
-                        approved={draftApproved}
-                        onApprove={approveDraft}
-                        onEdit={() => setMessage("Quiero modificar: ")}
-                      />
-                    ) : <p>{item.content}</p>}
-                    <span>{item.time}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <form className="composer" onSubmit={sendMessage}>
-            <textarea
-              rows="2"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  sendMessage(event);
-                }
-              }}
-              placeholder="Escribí un mensaje..."
-              aria-label="Mensaje para el agente"
-            />
-            <button type="submit" disabled={!message.trim()} aria-label="Enviar mensaje"><Send size={17} /></button>
-          </form>
-        </div>
+      <div className="menu-actions">
+        {draft.status === "ready" && <button className="primary-button" onClick={onConfirm} disabled={Boolean(busy)}><BadgeCheck size={15} /> {busy === "confirm" ? "Confirming..." : "Confirm exact terms"}</button>}
+        {reviewed && !editable && <button className="secondary-button" onClick={onEditReviewed} disabled={Boolean(busy)}>Edit terms</button>}
+        {reviewed && <button className="primary-button" onClick={onSign} disabled={Boolean(busy)}><FileSignature size={15} /> {busy === "sign" ? "Signing..." : "Sign mandate on chain"}</button>}
+        {signed && <p className="signed-note"><ShieldCheck size={15} /> Mandate #{draft.signing?.mandateId} is constrained by: <code>{shortHash(draft.signing?.constraintHash)}</code></p>}
       </div>
     </section>
   );
 }
 
-function MandateDraftCard({ draft, approved, onApprove, onEdit }) {
+/**
+ * The merchant wallets only once a merchant is in the picture.
+ *
+ * Two US$0.00 cards next to the buyer from the first frame told a viewer
+ * nothing and read as part of the buyer's own balance. They earn their place
+ * when a quote is bound to one of them and the capture is about to move money.
+ */
+function WalletRow({ demo, showMerchants }) {
+  return <section className={`wallet-row ${showMerchants ? "" : "solo"}`}>
+    <article className="wallet buyer"><span>Buyer</span><strong>US${money(demo.balances.buyer)}</strong><small>{demo.buyer.name}<br />{demo.kyc.captureReady ? "KYC token ready" : "KYC pending"}</small></article>
+    {showMerchants && demo.flight.merchants.map((merchant) => <article className="wallet merchant" key={merchant.name}><span>{merchant.name}</span><strong>US${money(merchant.balance)}</strong><small>approved merchant</small></article>)}
+  </section>;
+}
+
+/**
+ * Field names as a human reads them.
+ *
+ * The agent's `field` is a path into the typed intent ("trip.departure_date",
+ * "constraints.budgetUsd"), and both the model and the code write it in their
+ * own casing. Showing that raw put "departure_date" and "budgetUsd" in front of
+ * the buyer.
+ */
+const QUESTION_LABELS = {
+  origin: "Origin",
+  destination: "Destination",
+  departuredate: "Departure date",
+  returndate: "Return date",
+  passengers: "Passengers",
+  budgetusd: "Budget",
+  budget: "Budget",
+  cabin: "Cabin",
+  maxstops: "Stops",
+  airlinepreference: "Airline",
+  airline: "Airline",
+  authorizationexpiresat: "Valid through",
+};
+
+function questionLabel(field) {
+  const key = String(field ?? "").split(".").pop();
+  const normalised = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  if (QUESTION_LABELS[normalised]) return QUESTION_LABELS[normalised];
+  const spaced = key.replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase() : "Detail";
+}
+
+/**
+ * The terms the agent had to ask for.
+ *
+ * Rendered in the chat rather than the operations pane because that is where
+ * the question was asked. An unanswered gap is the agent refusing to invent a
+ * value, so it is shown as a normal part of the conversation, not an error.
+ */
+function ClarificationCard({ clarification }) {
   return (
-    <article className="draft-card">
-      <div className="draft-card-header">
-        <div><span>MANDATE DRAFT</span><strong>Borrador v{draft.version}</strong></div>
-        <em>{approved ? "Firmado" : "Sin firmar"}</em>
-      </div>
-      <div className="draft-product"><strong>{draft.product}</strong><span>{draft.specification}</span></div>
-      <dl>
-        <DataRow label="Cantidad" value={draft.quantity} />
-        <DataRow label="Frecuencia" value={draft.frequency} />
-        <DataRow label="Máximo por unidad" value={draft.unitLimit} />
-        <DataRow label="Límite total" value={draft.totalLimit} />
-        <DataRow label="Vigencia" value={draft.expiration} />
-        <DataRow label="Método" value={draft.paymentMethod} />
+    <section className="kyc-card clarification-card">
+      <div className="section-label"><AlertTriangle size={14} /> Missing terms</div>
+      <p>Nothing was searched, signed, or charged.</p>
+      <dl className="clarification-list">
+        {clarification.questions.map((question) => (
+          <div key={question.field || question.question}>
+            <dt>{questionLabel(question.field)}</dt>
+            <dd>{question.question}</dd>
+          </div>
+        ))}
       </dl>
-      <div className="draft-actions">
-        <button onClick={onEdit} disabled={approved}>Seguir editando</button>
-        <button className="approve-draft" onClick={onApprove} disabled={approved}>
-          {approved ? <><Check size={14} />Mandato firmado</> : <>Revisar y firmar <ArrowRight size={14} /></>}
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function MandatesPage({ mandates, onCreate, onSelect }) {
-  return (
-    <section className="page">
-      <div className="page-toolbar">
-        <div className="list-summary"><span>{mandates.length} mandatos</span><span>{mandates.filter((item) => item.status === "Activo").length} activos</span></div>
-        <button className="primary-button" onClick={onCreate}><Plus size={17} />Nuevo mandato</button>
-      </div>
-      <div className="mandate-list">
-        {mandates.map((mandate) => (
-            <article className="mandate-card" key={mandate.id}>
-              <button className="mandate-main" onClick={() => onSelect(mandate.id)}>
-                <div className="mandate-product">
-                  <span>{mandate.id}</span>
-                  <strong>{mandate.product}</strong>
-                  <small>{mandate.description}</small>
-                </div>
-                <div className="mandate-field"><span>Reposición</span><strong>{mandate.frequency}</strong></div>
-                <div className="mandate-field"><span>Precio máximo</span><strong>{currency.format(mandate.unitPrice)}</strong></div>
-                <Status value={mandate.status} />
-                <ChevronRight className="mandate-chevron" size={18} />
-              </button>
-            </article>
-        ))}
-      </div>
     </section>
   );
 }
 
-const mandateSections = [
-  { id: "detail", label: "Detalle" },
-  { id: "activity", label: "Actividad" },
-  { id: "offers", label: "Ofertas" },
-  { id: "purchases", label: "Compras" },
-];
+const COMMITMENT_LABEL = {
+  committed: "booking order",
+  conditional: "conditional",
+  exploratory: "question",
+};
 
-function MandateDetailPage({ mandate, onBack, onRevoke }) {
-  const [section, setSection] = useState("detail");
-  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
-  const activity = mandateActivity[mandate.id] || [];
-  const offers = mandateOffers[mandate.id] || [];
-  const relatedPurchases = purchases.filter((purchase) => purchase.mandate.startsWith(mandate.id));
-  const available = Math.max(mandate.monthlyBudget - mandate.spent - mandate.reserved, 0);
+/**
+ * What the agent would book, and what it actually did: nothing.
+ *
+ * This panel exists to make the commitment gate visible. Everything in it was
+ * produced with no mandate access and no way to move money, which is why it can
+ * be shown before anything is signed.
+ */
+function AgentSuggestion({ suggestion }) {
+  if (!suggestion) return null;
+  // `detail` is deliberately not rendered here: the chat reply already opens
+  // with that exact sentence, and printing it twice was half this card.
+  const { best, options, overBudget, rejected, trace, brief, commitment } = suggestion;
 
   return (
-    <section className="page mandate-detail-page">
-      <button className="back-button" onClick={onBack}><ArrowLeft size={16} />Volver a mandatos</button>
-
-      <div className="detail-hero">
-        <div>
-          <div className="detail-identity"><span>{mandate.id}</span><Status value={mandate.status} /><em>DEMO</em></div>
-          <h1>{mandate.product}</h1>
-          <p>{mandate.description}</p>
-        </div>
-        <div className="detail-hero-actions">
-          <div className="detail-hero-meta">
-            <span>Revisión</span>
-            <strong>v{mandate.version}</strong>
-          </div>
-          {mandate.status === "Activo" && (
-            <button className="revoke-button" onClick={() => setConfirmingRevoke(true)}>Revocar mandato</button>
-          )}
-        </div>
+    <section className="operations-card search-card">
+      <div className="card-heading">
+        <div><Search size={16} /><span><strong>Agent comparison</strong><small>compared, authorized nothing</small></span></div>
+        <em>{COMMITMENT_LABEL[commitment] ?? commitment}</em>
       </div>
 
-      {confirmingRevoke && (
-        <div className="revoke-confirmation">
-          <div><strong>¿Revocar este mandato ahora?</strong><p>Las próximas autorizaciones fallarán. Las compras ya confirmadas no se cancelan.</p></div>
-          <button onClick={() => setConfirmingRevoke(false)}>Volver</button>
-          <button onClick={() => { onRevoke(mandate.id); setConfirmingRevoke(false); }}>Confirmar revocación</button>
+      {best && (
+        <div className="selected-itinerary">
+          <Plane size={16} />
+          <div>
+            <strong>Would book: {best.airline} {best.quoteId}</strong>
+            <small>
+              {best.origin} to {best.destination} · {best.departureDate} {best.departureTime} ·
+              {best.stops === 0 ? " direct" : ` ${best.stops} stop(s)`} · {best.cabin} ·
+              {` ${best.passengers} passenger(s)`}
+            </small>
+          </div>
+          <b>US${money(best.totalPrice)}</b>
         </div>
       )}
 
-      <nav className="mandate-subnav" aria-label="Secciones del mandato">
-        {mandateSections.map((item) => (
-          <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
-            {item.label}
-            {item.id === "offers" && <span>{offers.length}</span>}
-            {item.id === "purchases" && <span>{relatedPurchases.length}</span>}
-          </button>
-        ))}
-      </nav>
-
-      {section === "detail" && (
-        <MandateSummary mandate={mandate} available={available} activity={activity} purchases={relatedPurchases} />
+      {brief?.reference?.length > 0 && (
+        <div className="required-note">
+          <AlertTriangle size={14} />
+          <span>
+            You did not give {brief.reference.join(", ")}. The agent compared on a reference value, not on
+            something you asked for. It cannot reach a mandate.
+          </span>
+        </div>
       )}
-      {section === "activity" && <MandateActivity activity={activity} />}
-      {section === "offers" && <MandateOffers offers={offers} mandate={mandate} />}
-      {section === "purchases" && <MandatePurchases purchases={relatedPurchases} />}
-    </section>
-  );
-}
 
-function MandateSummary({ mandate, available, activity, purchases: relatedPurchases }) {
-  const lastPurchase = relatedPurchases[0];
-  const executionSteps = lastPurchase ? [
-    { label: "chk! it out · oferta elegida", detail: `${lastPurchase.quantity} a ${lastPurchase.supplier}` },
-    { label: "write the chk! · saldo retirado", detail: `${currency.format(lastPurchase.total)} → chk! fund` },
-    { label: "Autorización registrada", detail: `Polygon · Demo · ${lastPurchase.transaction}` },
-    { label: "Tarjeta virtual generada", detail: `${lastPurchase.card} · un solo uso` },
-    { label: "Mandato validado por el vendedor", detail: "Activo · agente y monto autorizados" },
-    { label: "Compra confirmada", detail: lastPurchase.id },
-  ] : [];
-
-  return (
-    <div className="mandate-section-content">
-      <div className="mandate-metrics">
-        <Metric label="Disponible" value={currency.format(available)} />
-        <Metric label="Gastado" value={currency.format(mandate.spent)} />
-        <Metric label="Reservado" value={currency.format(mandate.reserved)} />
-        <Metric label="Máximo por compra" value={currency.format(mandate.maxPerOperation)} />
-      </div>
-
-      <div className="mandate-detail-grid">
-        <article className="detail-panel">
-          <div className="panel-heading"><ClipboardList size={17} /><h2>Reglas del mandato</h2></div>
-          <dl className="detail-data-list">
-            <DataRow label="Cantidad máxima" value={mandate.quantity} />
-            <DataRow label="Reposición" value={mandate.frequency} />
-            <DataRow label="Precio unitario máximo" value={currency.format(mandate.unitPrice)} />
-            <DataRow label="Presupuesto total" value={currency.format(mandate.monthlyBudget)} />
-            <DataRow label="Vigencia" value={`${mandate.validAfter} — ${mandate.expires}`} />
-            <DataRow label="Agente autorizado" value={`${mandate.agent} · ${mandate.agentAddress}`} />
-          </dl>
-          <div className="allowed-actions">
-            <span>Acciones permitidas</span>
-            <div>{mandate.allowedActions.map((action) => <em key={action}>{action}</em>)}</div>
-          </div>
-        </article>
-
-        <article className="detail-panel supplier-panel">
-          <div className="panel-heading"><Store size={17} /><h2>Proveedor elegido</h2></div>
-          <strong className="selected-supplier">{mandate.currentSupplier}</strong>
-          <p>{mandate.supplierReason}</p>
-          <dl className="detail-data-list compact">
-            <DataRow label="Proveedor anterior" value={mandate.previousSupplier} />
-            <DataRow label="Última búsqueda" value={mandate.lastRun} />
-            <DataRow label="Próxima búsqueda" value={mandate.nextRun} />
-          </dl>
-        </article>
-
-        <article className="detail-panel payment-panel">
-          <div className="panel-heading"><WalletCards size={17} /><h2>Cuenta y método</h2></div>
-          <dl className="detail-data-list">
-            <DataRow label="Cuenta" value={mandate.account} />
-            <DataRow label="Saldo actual" value={currency.format(mandate.accountBalance)} />
-            <DataRow label="Método" value={mandate.paymentMethod} />
-            <DataRow label="Última tarjeta" value={mandate.lastCard} />
-            <DataRow label="Payment delegate" value={mandate.paymentDelegate} />
-          </dl>
-        </article>
-
-        <article className="detail-panel execution-panel">
-          <div className="panel-heading"><CreditCard size={17} /><h2>Última compra</h2></div>
-          {executionSteps.length > 0 ? (
-            <div className="execution-steps">
-              {executionSteps.map((step) => (
-                <div key={step.label}><i><Check size={12} /></i><span><strong>{step.label}</strong><small>{step.detail}</small></span></div>
-              ))}
+      {options?.length > 1 && (
+        <div className="offer-list">
+          {options.slice(1).map((offer) => (
+            <div className="offer eligible" key={offer.quoteId}>
+              <strong>{offer.airline}</strong>
+              <small>{offer.departureTime} · {offer.stops === 0 ? "direct" : `${offer.stops} stop(s)`} · {offer.cabin}</small>
+              <span className="offer-price">US${money(offer.totalPrice)}</span>
             </div>
-          ) : <p className="empty-copy">Este mandato todavía no realizó compras.</p>}
-        </article>
-      </div>
-
-      <article className="detail-panel recent-activity-panel">
-        <div className="panel-heading"><Clock3 size={17} /><h2>Actividad reciente</h2></div>
-        <div className="recent-activity-list">
-          {activity.slice(0, 4).map((event) => (
-            <div key={`${event.time}-${event.title}`}><span>{event.time}</span><strong>{event.title}</strong><p>{event.detail}</p></div>
           ))}
         </div>
-      </article>
-
-      {lastPurchase && (
-        <article className="merchant-verification-panel">
-          <div className="merchant-verification-copy">
-            <span>PRESENTACIÓN AL VENDEDOR · DEMO</span>
-            <h2>{lastPurchase.supplier} aceptó la compra</h2>
-            <p>El vendedor verificó la autorización actual contra MandateVault sin acceder a la política privada completa.</p>
-          </div>
-          <div className="merchant-checks">
-            <span><Check size={13} />Mandato activo</span>
-            <span><Check size={13} />Agente autorizado</span>
-            <span><Check size={13} />Monto dentro del límite</span>
-            <span><Check size={13} />Autorización de un uso válida</span>
-          </div>
-        </article>
       )}
 
-      <details className="technical-details">
-        <summary><ShieldCheck size={16} />Detalles técnicos simulados</summary>
-        <dl>
-          <DataRow label="Owner" value={mandate.owner} />
-          <DataRow label="Agent" value={mandate.agentAddress} />
-          <DataRow label="Policy hash" value={mandate.canonical?.policyHash ?? mandate.policyHash} />
-          <DataRow label="Contrato" value="MandateVault · Polygon Demo" />
-        </dl>
-      </details>
-    </div>
-  );
-}
-
-function Metric({ label, value }) {
-  return <article><span>{label}</span><strong>{value}</strong></article>;
-}
-
-function DataRow({ label, value }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>;
-}
-
-function MandateActivity({ activity }) {
-  const icons = { success: CheckCircle2, card: CreditCard, chain: ShieldCheck, account: WalletCards, supplier: Store, search: Clock3 };
-  return (
-    <div className="mandate-section-content narrow-content">
-      <div className="full-activity-list">
-        {activity.map((event) => {
-          const Icon = icons[event.type] || Clock3;
-          return (
-            <article key={`${event.time}-${event.title}`}>
-              <div className="activity-icon"><Icon size={16} /></div>
-              <div><span>{event.time}</span><h3>{event.title}</h3><p>{event.detail}</p></div>
-            </article>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MandateOffers({ offers, mandate }) {
-  return (
-    <div className="mandate-section-content">
-      <div className="offers-context">
-        <span>Última búsqueda</span><strong>{mandate.lastRun}</strong><p>{offers.length} ofertas relevantes encontradas</p>
-      </div>
-      <div className="offers-table">
-        <div className="offers-head"><span>Proveedor</span><span>Precio unitario</span><span>Entrega</span><span>Puntaje</span><span>Resultado</span></div>
-        {offers.map((offer) => (
-          <article key={offer.supplier} className={offer.result === "Elegida" ? "selected" : ""}>
-            <div><strong>{offer.supplier}</strong>{offer.result === "Elegida" && <small>Elegida por el agente</small>}</div>
-            <strong>{currency.format(offer.unitPrice)}</strong>
-            <span>{offer.delivery}</span>
-            <span>{offer.score}/100</span>
-            <span className={`offer-result ${offer.result.toLowerCase().replaceAll(" ", "-")}`}>{offer.result}</span>
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MandatePurchases({ purchases: relatedPurchases }) {
-  return (
-    <div className="mandate-section-content">
-      <div className="history-list mandate-purchases-list">
-        <div className="history-head">
-          <span>Compra</span><span>Proveedor</span><span>Cantidad</span><span>Total</span><span>Tarjeta</span>
-        </div>
-        {relatedPurchases.map((purchase) => (
-          <article className="history-row" key={purchase.id}>
-            <div><strong>{purchase.id}</strong><span>{purchase.date}</span></div>
-            <div><strong>{purchase.supplier}</strong><span>{purchase.mandate}</span></div>
-            <div><strong>{purchase.quantity}</strong></div>
-            <div><strong>{currency.format(purchase.total)}</strong></div>
-            <div><strong>{purchase.card}</strong><span>{purchase.status}</span></div>
-          </article>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HistoryPage() {
-  return (
-    <section className="page">
-      <div className="history-list">
-        <div className="history-head">
-          <span>Compra</span><span>Producto</span><span>Proveedor</span><span>Total</span><span>Estado</span>
-        </div>
-        {purchases.map((purchase) => (
-          <article className="history-row" key={purchase.id}>
-            <div><strong>{purchase.id}</strong><span>{purchase.date}</span></div>
-            <div><strong>{purchase.product}</strong><span>{purchase.quantity} · {purchase.mandate}</span></div>
-            <div><strong>{purchase.supplier}</strong></div>
-            <div><strong>{currency.format(purchase.total)}</strong></div>
-            <div><span className="purchase-status"><Check size={13} />Comprada</span></div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AccountPage() {
-  return (
-    <section className="page account-page">
-      <div className="account-grid">
-        <article className="balance-card">
-          <div className="account-card-heading"><Building2 size={18} /><span>CUENTA DE ORIGEN</span></div>
-          <p>Saldo disponible</p>
-          <strong>{currency.format(1108000)}</strong>
-          <div className="account-number"><span>Cuenta operativa ARS</span><em>•••• 1842</em></div>
-        </article>
-
-        <article className="account-panel">
-          <div className="account-card-heading"><CreditCard size={18} /><span>MÉTODO PREFERIDO</span></div>
-          <div className="payment-method-mock">
-            <span>Tarjeta empresa</span>
-            <strong>•••• 4242</strong>
-            <small>Se usa para fondear chk! fund cuando el agente decide comprar.</small>
-          </div>
-          <button className="account-secondary-button">Cambiar método</button>
-        </article>
-
-        <article className="account-panel fund-panel">
-          <div className="account-card-heading"><WalletCards size={18} /><span>CHK! FUND</span></div>
-          <div className="fund-stats">
-            <div><span>En proceso</span><strong>{currency.format(0)}</strong></div>
-            <div><span>Ejecutado este mes</span><strong>{currency.format(240400)}</strong></div>
-            <div><span>Reintegros</span><strong>{currency.format(0)}</strong></div>
-          </div>
-          <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar y se consumen al emitir la tarjeta virtual.</p>
-        </article>
-
-        <article className="account-panel card-policy-panel">
-          <div className="account-card-heading"><ShieldCheck size={18} /><span>TARJETAS VIRTUALES</span></div>
-          <dl className="detail-data-list">
-            <DataRow label="Modalidad" value="Un solo uso" />
-            <DataRow label="Límite" value="Importe exacto de la orden" />
-            <DataRow label="Vigencia" value="Hasta completar el checkout" />
-            <DataRow label="Payment delegate" value="VirtualCardAdapter" />
-          </dl>
-        </article>
-      </div>
-
-      <article className="money-flow-panel">
-        <div className="account-card-heading"><ArrowRight size={18} /><span>FLUJO DE UNA COMPRA</span></div>
-        <div className="money-flow">
-          <div><i>1</i><span><strong>El agente decide</strong><small>La oferta cumple el mandato</small></span></div>
-          <ArrowRight size={17} />
-          <div><i>2</i><span><strong>Cuenta → chk! fund</strong><small>El saldo se retira</small></span></div>
-          <ArrowRight size={17} />
-          <div><i>3</i><span><strong>Polygon</strong><small>Registra la autorización</small></span></div>
-          <ArrowRight size={17} />
-          <div><i>4</i><span><strong>Tarjeta virtual</strong><small>Paga al productor</small></span></div>
-        </div>
-      </article>
-
-      <article className="account-movements">
-        <div className="account-card-heading"><History size={18} /><span>ÚLTIMOS MOVIMIENTOS</span></div>
-        <div className="movement-row">
-          <div><strong>Compra OC-2841</strong><span>Film stretch · Distribuidora Centro</span></div>
-          <div><strong>-{currency.format(142000)}</strong><span>29 ago · 10:22</span></div>
-        </div>
-        <div className="movement-row">
-          <div><strong>Compra OC-2827</strong><span>Guantes de nitrilo · Proveeduría Norte</span></div>
-          <div><strong>-{currency.format(98400)}</strong><span>22 ago · 09:09</span></div>
-        </div>
-      </article>
-    </section>
-  );
-}
-
-function WhatsappPage() {
-  const [view, setView] = useState("inbox");
-  const [connection, setConnection] = useState({ status: "loading", qr: null, user: null, error: null });
-  const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-
-    async function refreshStatus() {
-      try {
-        const response = await fetch("/api/whatsapp/status");
-        const data = await response.json();
-        if (active) setConnection(data);
-      } catch {
-        if (active) setConnection({ status: "error", error: "No se pudo contactar al servidor" });
-      }
-    }
-
-    refreshStatus();
-    const interval = setInterval(refreshStatus, 1500);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  async function runAction(name, url, options) {
-    setAction(name);
-    setNotice(null);
-    try {
-      const response = await fetch(url, options);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "La operación no pudo completarse");
-      if (name === "test") setNotice("Mensaje de prueba enviado a tu propio chat.");
-      else setConnection(data);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  const status = connection.status;
-  const phone = connection.user?.id?.split("@")[0] || "";
-
-  return (
-    <section className="page whatsapp-page">
-      <nav className="notice-subnav" aria-label="Avisos y notificaciones">
-        <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}>Bandeja <span>4</span></button>
-        <button className={view === "preferences" ? "active" : ""} onClick={() => setView("preferences")}>Preferencias</button>
-        <button className={view === "whatsapp" ? "active" : ""} onClick={() => setView("whatsapp")}>WhatsApp</button>
-      </nav>
-
-      {view === "inbox" && <NotificationsInbox />}
-      {view === "preferences" && <NotificationPreferences />}
-      {view === "whatsapp" && <div className="whatsapp-card">
-        <div className="whatsapp-copy">
-          <div className="whatsapp-icon"><Smartphone size={23} /></div>
-          <span className="setup-label">INTEGRACIÓN</span>
-          <h1>Avisos y notificaciones</h1>
-          <p>Configurá WhatsApp para recibir en tu propio chat las novedades de chk! Buyer, tu agente de compras.</p>
-          <ol>
-            <li>Abrí WhatsApp en tu teléfono.</li>
-            <li>Entrá en <strong>Dispositivos vinculados</strong>.</li>
-            <li>Elegí <strong>Vincular un dispositivo</strong> y escaneá el QR.</li>
-          </ol>
-          <div className="baileys-note">Esta prueba utiliza Baileys y guarda la sesión solamente en este servidor.</div>
-        </div>
-
-        <div className="whatsapp-state">
-          {(status === "loading" || status === "connecting" || status === "reconnecting") && (
-            <div className="connection-panel">
-              <RefreshCw className="spin" size={27} />
-              <strong>{status === "reconnecting" ? "Reconectando WhatsApp" : "Preparando conexión"}</strong>
-              <p>Esto puede demorar unos segundos.</p>
+      {overBudget?.length > 0 && (
+        <div className="offer-list">
+          {overBudget.map((offer) => (
+            <div className="offer rejected" key={offer.quoteId}>
+              <strong>{offer.airline}</strong>
+              <small>over the cap you gave</small>
+              <span className="offer-price">US${money(offer.totalPrice)}</span>
             </div>
-          )}
-
-          {status === "disconnected" && (
-            <div className="connection-panel">
-              <div className="state-icon"><QrCode size={27} /></div>
-              <strong>Listo para vincular</strong>
-              <p>Generá un código QR para comenzar.</p>
-              <button
-                className="whatsapp-primary"
-                disabled={action === "connect"}
-                onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}
-              >
-                {action === "connect" ? "Generando..." : "Generar código QR"}
-              </button>
-            </div>
-          )}
-
-          {status === "qr" && connection.qr && (
-            <div className="qr-panel">
-              <span>Escaneá este código</span>
-              <div className="qr-frame"><img src={connection.qr} alt="Código QR para vincular WhatsApp" /></div>
-              <p>El código se renueva automáticamente si vence.</p>
-            </div>
-          )}
-
-          {status === "connected" && (
-            <div className="connection-panel connected">
-              <div className="connected-icon"><CheckCircle2 size={30} /></div>
-              <strong>WhatsApp conectado</strong>
-              <p>{connection.user?.name || "Cuenta vinculada"}{phone && ` · +${phone}`}</p>
-              <button
-                className="whatsapp-primary"
-                disabled={action === "test"}
-                onClick={() => runAction("test", "/api/whatsapp/test", { method: "POST" })}
-              >
-                <Send size={15} /> {action === "test" ? "Enviando..." : "Enviar mensaje de prueba"}
-              </button>
-              <button
-                className="disconnect-button"
-                disabled={action === "disconnect"}
-                onClick={() => runAction("disconnect", "/api/whatsapp/session", { method: "DELETE" })}
-              >
-                <Unplug size={14} /> Desvincular cuenta
-              </button>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="connection-panel error">
-              <strong>No pudimos iniciar WhatsApp</strong>
-              <p>{connection.error}</p>
-              <button className="whatsapp-primary" onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}>Reintentar</button>
-            </div>
-          )}
-
-          {notice && <div className="whatsapp-notice">{notice}</div>}
-        </div>
-      </div>}
-    </section>
-  );
-}
-
-function NotificationsInbox() {
-  const notices = [
-    { icon: Store, type: "Proveedor cambiado", title: "Distribuidora Centro reemplazó a PackAR", detail: "Film stretch · 12% más económico y entrega en 48 horas.", meta: "MD-001 · Hoy, 10:22", channel: "WhatsApp enviado" },
-    { icon: CheckCircle2, type: "Compra realizada", title: "Compra OC-2841 confirmada", detail: "20 rollos de film stretch por $142.000.", meta: "MD-001 · Hoy, 10:24", channel: "WhatsApp enviado" },
-    { icon: ShieldCheck, type: "Mandato activado", title: "Mandato v3 registrado en Polygon", detail: "La política está activa y disponible para verificación del vendedor.", meta: "MD-001 · 15 ago, 14:32", channel: "Solo en la app" },
-    { icon: Clock3, type: "Sin ofertas válidas", title: "No se pudo completar la búsqueda", detail: "Las ofertas de aceite hidráulico superaron el precio máximo.", meta: "MD-003 · Ayer, 16:42", channel: "WhatsApp enviado" },
-  ];
-
-  return (
-    <div className="notifications-layout">
-      <div className="notifications-list">
-        {notices.map((notice) => {
-          const Icon = notice.icon;
-          return (
-            <article className="notification-item" key={`${notice.type}-${notice.meta}`}>
-              <div className="notification-icon"><Icon size={16} /></div>
-              <div className="notification-copy"><span>{notice.type}</span><h2>{notice.title}</h2><p>{notice.detail}</p><small>{notice.meta}</small></div>
-              <em>{notice.channel}</em>
-            </article>
-          );
-        })}
-      </div>
-      <aside className="notifications-summary">
-        <span>HOY</span>
-        <strong>2</strong>
-        <p>avisos enviados por WhatsApp</p>
-        <div><span>Proveedor cambiado</span><em>1</em></div>
-        <div><span>Compra realizada</span><em>1</em></div>
-      </aside>
-    </div>
-  );
-}
-
-function NotificationPreferences() {
-  const preferences = [
-    ["Compra realizada", "Confirmación y detalle de cada orden", true],
-    ["Proveedor cambiado", "Proveedor anterior, nuevo y motivo", true],
-    ["Compra fallida", "Errores de checkout o rechazo", true],
-    ["Saldo insuficiente", "El agente no pudo retirar los fondos", true],
-    ["Fallo blockchain", "La autorización no pudo registrarse", true],
-    ["Tarjeta virtual fallida", "No se pudo emitir o utilizar la tarjeta", true],
-    ["Sin ofertas válidas", "Ninguna opción cumplió el mandato", true],
-    ["Mandato por vencer", "Aviso 7 días antes del vencimiento", true],
-    ["Búsqueda completada", "Resumen de cada ejecución programada", false],
-  ];
-
-  return (
-    <div className="preferences-panel">
-      <div className="preferences-heading"><div><span>NOTIFICACIONES</span><h2>Qué querés recibir</h2></div><p>Los eventos críticos siempre quedan registrados en la bandeja.</p></div>
-      <div className="preference-list">
-        {preferences.map(([title, description, enabled]) => (
-          <label key={title}>
-            <span><strong>{title}</strong><small>{description}</small></span>
-            <input type="checkbox" defaultChecked={enabled} />
-            <i />
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-async function demoRequest(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "The operation could not be completed.");
-  return payload;
-}
-
-function LiveDemoPage() {
-  const [demo, setDemo] = useState(null);
-  const [purchaseId, setPurchaseId] = useState(null);
-  const [verification, setVerification] = useState(null);
-  const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState("Start the local chain, then complete KYC payment login before signing a mandate.");
-
-  async function startDemo() {
-    setAction("start");
-    setNotice("");
-    setPurchaseId(null);
-    setVerification(null);
-    try {
-      const state = await demoRequest("/api/demo/reset", {
-        method: "POST",
-        body: JSON.stringify({ product: "flight-cordoba", quantity: 1, maxUnitPrice: "150", budget: "150" }),
-      });
-      setDemo(state);
-      setNotice(`Local payment stack deployed in block ${state.network.latestBlock}. No mandate or payment credential exists yet.`);
-    } catch (error) {
-      setNotice(`Backend unavailable: ${error.message}`);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function completeKycLogin() {
-    setAction("kyc");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/kyc/login", { method: "POST" });
-      setDemo(state);
-      setNotice(`KYC payment login confirmed in block ${state.network.latestBlock}. Marta's opaque payment token is ready for capture; no money moved.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function createMandate() {
-    setAction("mandate");
-    setNotice("");
-    try {
-      const state = await demoRequest("/api/demo/mandate", {
-        method: "POST",
-        body: JSON.stringify({ quantity: 1, maxUnitPrice: "150", budget: "150" }),
-      });
-      setDemo(state);
-      setNotice(`Mandate signed in block ${state.network.latestBlock}. Marta authorizes one flight to Córdoba up to US$150; no funds are locked.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function findAndAuthorize() {
-    setAction("authorize");
-    setNotice("");
-    try {
-      const result = await demoRequest("/api/demo/agent/purchase", {
-        method: "POST",
-        body: JSON.stringify({ orderReference: "VuelaYa-COR-130", quantity: 1, unitPrice: "130" }),
-      });
-      setPurchaseId(result.purchaseId);
-      setDemo(result.state);
-      setNotice(`Agent transaction confirmed in block ${result.state.network.latestBlock}. VuelaYa's signed US$130 checkout is bound to the mandate; Marta has not been charged.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function verifyPurchase() {
-    if (!purchaseId) return;
-    setAction("verify");
-    setNotice("");
-    try {
-      const result = await demoRequest(`/api/demo/merchant/verify/${purchaseId}`);
-      setVerification(result);
-      setNotice(result.verified
-        ? "VuelaYa read live chain state and approved every verification check."
-        : "Merchant verification failed. Capture is blocked.");
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  async function capturePurchase() {
-    if (!purchaseId) return;
-    setAction("capture");
-    setNotice("");
-    try {
-      const result = await demoRequest(`/api/demo/merchant/capture/${purchaseId}`, { method: "POST" });
-      setDemo(result.state);
-      setNotice(`Merchant capture confirmed in block ${result.state.network.latestBlock}. US$130 is now in VuelaYa's account.`);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  const balances = demo?.balances || { buyer: "—", cardProcessor: "—", merchant: "—" };
-  const hasKycPayment = Boolean(demo?.kyc?.captureReady);
-  const hasMandate = Boolean(demo?.mandate);
-  const isCaptured = Boolean(demo) && Number(balances.merchant) > 0;
-  const canVerify = Boolean(purchaseId) && !verification;
-  const canCapture = Boolean(verification?.verified) && !isCaptured;
-  const step = !demo ? 1 : !hasKycPayment ? 2 : !hasMandate ? 3 : !purchaseId ? 4 : !verification ? 5 : !isCaptured ? 6 : 7;
-
-  return (
-    <section className="page live-demo-page">
-      <div className="page-header live-demo-header">
-        <div>
-          <span className="eyebrow">LIVE BACKEND DEMO · LOCAL EVM CHAIN</span>
-          <h1>Autonomous purchase, proven step by step.</h1>
-          <p>This is not a simulated progress bar. Every step below calls the local payment backend, submits a contract transaction, and reads the resulting state back from the chain.</p>
-        </div>
-        <button className="secondary-button" onClick={startDemo} disabled={action !== null}>
-          <RefreshCw size={15} /> {action === "start" ? "Deploying..." : demo ? "Reset local chain" : "Start local chain"}
-        </button>
-      </div>
-
-      <div className="demo-stepper">
-        {[[1, "Start chain"], [2, "KYC + payment token"], [3, "Sign mandate"], [4, "Agent binds checkout"], [5, "Merchant verifies"], [6, "Capture and pay"]].map(([number, label]) => <div key={number} className={step > number ? "done" : step === number ? "current" : ""}><b>{step > number ? "✓" : number}</b><span>{label}</span></div>)}
-      </div>
-
-      <div className="live-demo-mandate">
-        <div><span>BUYER + KYC LOGIN</span><strong>Marta · mock business bank account</strong><code>{demo?.kyc?.status || "not started"} · {shortAddress(demo?.identities?.owner)}</code></div>
-        <div><span>MANDATE</span><strong>1 Córdoba flight · max US$ {demo?.mandate?.maxUnitPrice || "150.0"}</strong><code>revision {demo?.mandate?.revision || "—"} · {demo?.mandate?.status || "not signed"}</code></div>
-        <div><span>PURCHASING AGENT</span><strong>CHK Buyer · separate wallet</strong><code>{shortAddress(demo?.identities.agent)}</code></div>
-        <div><span>APPROVED MERCHANT</span><strong>VuelaYa</strong><code>{shortAddress(demo?.identities.merchant)}</code></div>
-      </div>
-
-      <section className="live-demo-actions demo-setup-actions">
-        <article>
-          <span>STEP 2 · BUYER KYC / PAYMENT LOGIN</span>
-          <p>KYC verifies Marta and saves only an opaque card-on-file token. This permits instant capture later, but stores no raw card data and locks no funds.</p>
-          <button className="secondary-button" onClick={completeKycLogin} disabled={!demo || hasKycPayment || action !== null}>
-            <ShieldCheck size={15} /> {action === "kyc" ? "Enrolling payment token..." : hasKycPayment ? "KYC payment token ready" : "Complete KYC payment login"}
-          </button>
-        </article>
-        <article>
-          <span>STEP 3 · HUMAN SIGNS MANDATE</span>
-          <p>Marta delegates one specific flight purchase to CHK Buyer. The contract binds the agent, merchant, product rule, price cap, KYC reference, and revocation state.</p>
-          <button className="secondary-button" onClick={createMandate} disabled={!hasKycPayment || hasMandate || action !== null}>
-            <CheckCircle2 size={15} /> {action === "mandate" ? "Signing mandate..." : hasMandate ? "Mandate signed" : "Sign mandate"}
-          </button>
-        </article>
-      </section>
-
-      <div className="live-demo-offer">
-        <div className="offer-copy"><span>AGENT DISCOVERY RESULT</span><h2>Buenos Aires → Córdoba</h2><p>VuelaYa · US$130 · below Marta’s US$150 mandate limit.</p></div>
-        <div className="offer-price"><span>US$130</span><small>best eligible offer</small></div>
-        <button className="primary-button" onClick={findAndAuthorize} disabled={!hasMandate || action !== null || Boolean(purchaseId)}>
-          <CheckCircle2 size={15} /> {action === "authorize" ? "Binding checkout..." : purchaseId ? "Checkout bound" : "Agent buys automatically"}
-        </button>
-      </div>
-
-      <section className="money-flow" aria-label="Live money movement">
-        <MoneyNode icon={Building2} label="Marta's bank balance" value={`US$${balances.buyer}`} status={isCaptured ? "US$130 debited at capture" : purchaseId ? "Unchanged — capture pending" : "No mandate funds locked"} address={shortAddress(demo?.identities?.owner)} />
-        <FlowArrow active={isCaptured} label="capture-only debit" />
-        <MoneyNode icon={CreditCard} label="KYC-linked one-use credential" value={isCaptured ? "Consumed" : purchaseId ? "US$130 authorized" : "Not issued"} status={isCaptured ? "Used for VuelaYa checkout" : purchaseId ? "No funds held; VuelaYa only" : "Issued after quote binding"} highlighted={Boolean(purchaseId)} address={shortAddress(demo?.contracts?.cardProcessor)} />
-        <FlowArrow active={isCaptured} label="merchant capture" />
-        <MoneyNode icon={Store} label="VuelaYa settlement balance" value={`US$${balances.merchant}`} status={isCaptured ? "Payment received" : "Cannot receive before verification"} highlighted={isCaptured} address={shortAddress(demo?.identities?.merchant)} />
-      </section>
-
-      <section className="live-demo-actions">
-        <article>
-          <span>STEP 5 · LIVE MERCHANT CHECK</span>
-          <p>VuelaYa queries the contract. It must see an active mandate, KYC-linked payment token, matching merchant, current revision, signed checkout hash, and a live one-use credential.</p>
-          <button className="secondary-button" onClick={verifyPurchase} disabled={!canVerify || action !== null}>
-            <ShieldCheck size={15} /> {action === "verify" ? "Reading chain state..." : verification ? "Verification approved" : "Verify mandate live"}
-          </button>
-        </article>
-        <article>
-          <span>STEP 6 · CAPTURE PAYMENT</span>
-          <p>Only a verified merchant can capture. This atomically debits Marta’s tokenized card-on-file and pays VuelaYa in the next block—no pre-funded escrow.</p>
-          <button className="primary-button" onClick={capturePurchase} disabled={!canCapture || action !== null}>
-            <WalletCards size={15} /> {action === "capture" ? "Capturing on-chain..." : isCaptured ? "Payment settled" : "Capture US$130"}
-          </button>
-        </article>
-      </section>
-
-      {verification && (
-        <div className="verification-result">
-          <strong><ShieldCheck size={16} /> Merchant verification {verification.verified ? "passed" : "failed"}</strong>
-          <div>{Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}>{passed ? "✓" : "×"} {humanizeCheck(check)}</span>)}</div>
+          ))}
         </div>
       )}
 
-      <p className="live-demo-notice">{notice}</p>
+      {rejected?.length > 0 && (
+        <div className="offer-list">
+          {rejected.map((offer) => (
+            <div className="offer rejected" key={offer.quoteId}>
+              <strong>{offer.airline} {offer.quoteId}</strong>
+              <small>{offer.differences.map((difference) => `${difference.term}: asked ${difference.requested}, offered ${difference.offered}`).join("; ")}</small>
+              <p>{offer.verdict?.reason ?? "Did not match a term you gave."}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <section className="backend-proof">
-        <div><span>BACKEND PROOF</span><strong>{demo?.network.name || "Waiting to start the local chain"}</strong><small>chain ID {demo?.network.chainId || "—"} · latest block {demo?.network.latestBlock || "—"}</small></div>
-        <div><span>MANDATE CONTRACT</span><code>{demo?.contracts.vault || "—"}</code></div>
-        <div><span>PAYMENT PROCESSOR CONTRACT</span><code>{demo?.contracts.cardProcessor || "—"}</code></div>
-      </section>
-
-      <div className="live-demo-audit">
-        <span>ON-CHAIN TRANSACTION LOG</span>
-        {(demo?.audit || []).map((entry, index) => <div key={`${entry.type}-${index}`}><b>{index + 1}</b><code>{entry.type}</code><p>{entry.detail || entry.orderReference || entry.maxUnitPrice || "contract state changed"}</p><small>block {entry.blockNumber} · {shortAddress(entry.transactionHash)}</small></div>)}
-      </div>
+      <ul className="scrape-trace">
+        {trace.map((step) => (
+          <li key={`${step.source}-${step.detail}`}><span>{step.status}</span>{step.detail}</li>
+        ))}
+      </ul>
     </section>
   );
 }
 
-function shortAddress(address) {
-  return address ? `${address.slice(0, 8)}…${address.slice(-6)}` : "—";
+function SearchPanel({ flight, active, busy, onSearch }) {
+  const offers = flight?.search?.offers ?? [];
+  return <section className="operations-card search-card">
+    <div className="card-heading"><div><Search size={17} /><span><strong>Agent flight search</strong><small>Scrape, then filter on the signed terms</small></span></div>{flight?.search?.status && <em>{flight.search.status.replaceAll("_", " ")}</em>}</div>
+    {active && !flight?.selection && <button className="primary-button wide" onClick={onSearch} disabled={Boolean(busy)}><Plane size={15} /> {busy === "search" ? "Searching..." : "Search and authorize the cheapest eligible flight"}</button>}
+    {flight?.search?.trace?.length > 0 && <ul className="scrape-trace">{flight.search.trace.map((step) => <li key={step.source}><span>{step.status}</span>{step.detail}</li>)}</ul>}
+    {offers.length > 0 && <div className="offer-list">{offers.map((offer) => <article className={`offer ${offer.eligible ? "eligible" : "rejected"}`} key={offer.quoteId}><div><strong>{offer.airline}</strong><small>{offer.merchant} · {offer.quoteId}</small></div><div><span>{offer.departureTime} - {offer.arrivalTime}</span><small>{offer.route} · {offer.stops === 0 ? "nonstop" : `${offer.stops} stop(s)`}</small></div><div className="offer-price"><strong>US${money(offer.amount)}</strong><small>US${money(offer.unitPrice)} / ticket</small></div><p>{offer.eligible ? "Eligible under signed terms" : offer.rejectionReasons.join(" ")}</p></article>)}</div>}
+  </section>;
 }
 
-function humanizeCheck(check) {
-  return check.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+function MerchantPanel({ selection, verification, busy, onVerify, onCapture, active }) {
+  const settled = selection.status === "Settled";
+  return <section className="operations-card merchant-card">
+    <div className="card-heading"><div><ShieldCheck size={17} /><span><strong>{selection.merchant} merchant desk</strong><small>Quote {selection.orderReference} · mandate #{selection.mandateId}</small></span></div><em className={settled ? "settled" : "authorized"}>{selection.status}</em></div>
+    <div className="selected-itinerary"><Plane size={19} /><div><strong>{selection.selected.airline} · {selection.selected.route}</strong><small>{selection.selected.departureDate} · {selection.selected.departureTime} - {selection.selected.arrivalTime} · {selection.selected.cabin}</small></div><b>US${money(selection.selected.amount)}</b></div>
+    {!settled && <div className="merchant-actions"><button className="secondary-button" onClick={onVerify} disabled={Boolean(busy)}><ShieldCheck size={15} /> {busy === "verify" ? "Verifying..." : "Verify mandate on chain"}</button>{verification?.verified && active && <button className="primary-button" onClick={onCapture} disabled={Boolean(busy)}><WalletCards size={15} /> {busy === "capture" ? "Capturing..." : "Fill order & capture mock payment"}</button>}</div>}
+    {verification && <VerificationChecks verification={verification} />}
+  </section>;
 }
 
-function MoneyNode({ icon: Icon, label, value, status, address, highlighted = false }) {
-  return <article className={`money-node ${highlighted ? "highlighted" : ""}`}><Icon size={21} /><span>{label}</span><strong>{value}</strong><small>{status}</small><code>{address}</code></article>;
+function VerificationChecks({ verification }) {
+  return <div className={`verification ${verification.verified ? "passed" : "failed"}`}><strong>{verification.verified ? "Verification passed" : "Verification blocked capture"}</strong><div>{Object.entries(verification.checks).map(([name, passed]) => <span key={name} className={passed ? "pass" : "fail"}>{passed ? "✓" : "×"} {readable(name)}</span>)}</div></div>;
 }
 
-function FlowArrow({ active, label }) {
-  return <div className={`flow-arrow ${active ? "active" : ""}`}><i>→</i><span>{label}</span></div>;
+/**
+ * The unsafe paths, all of them always on screen.
+ *
+ * A trial that no longer applies is greyed out rather than removed. Removing it
+ * was read as the demo breaking: the buttons a viewer had just been looking at
+ * disappeared the moment one of them worked, and nothing said why. Disabled and
+ * still there, with the reason on hover, shows the same thing honestly - this
+ * one is spent, that one needs a revoked mandate.
+ */
+function TrialByFire({ active, mandate, selection, liveCap, onCapChange, onAmend, onOutside, onImposter, onExpired, onRevoke, onRevoked, onResetSigned, busy, trial }) {
+  const revoked = mandate?.status === "Revoked";
+  const expired = mandate?.status === "Expired";
+  const anyBusy = Boolean(busy);
+  const needsLive = "Needs a live mandate - reset to the signed phase first.";
+  const trials = [
+    { key: "outside", idle: "Flight $150 over cap", busy: "Testing...", onClick: onOutside, enabled: active, why: needsLive },
+    { key: "imposter", idle: "Impersonated agent", busy: "Testing...", onClick: onImposter, enabled: active, why: needsLive },
+    { key: "expired", idle: "Expire the mandate", busy: "Expiring...", onClick: onExpired, enabled: active, why: needsLive },
+    { key: "revoke", idle: "Revoke the mandate", busy: "Revoking...", onClick: onRevoke, enabled: active, why: needsLive },
+    { key: "revoked", idle: "Buy after revocation", busy: "Testing...", onClick: onRevoked, enabled: revoked, why: "Revoke the mandate first." },
+  ];
+
+  return <section className="operations-card trial-card">
+    <div className="card-heading">
+      <div><AlertTriangle size={17} /><span><strong>Trial by fire</strong><small>Unsafe paths fail loudly and leave no charge behind</small></span></div>
+      <button className="quiet-button" type="button" onClick={onResetSigned} disabled={anyBusy}>
+        <RefreshCw size={13} className={busy === "resign" ? "spin" : ""} /> {busy === "resign" ? "Re-signing..." : "Reset to signed"}
+      </button>
+    </div>
+    <div className="trial-actions">
+      {trials.map((entry) => (
+        <button
+          key={entry.key}
+          className="danger-button"
+          onClick={entry.onClick}
+          disabled={anyBusy || !entry.enabled}
+          title={entry.enabled ? undefined : entry.why}
+        >
+          <Ban size={15} /> {busy === entry.key ? entry.busy : entry.idle}
+        </button>
+      ))}
+      <label className="cap-control">Live ticket cap
+        <input value={liveCap} onChange={(event) => onCapChange(event.target.value)} disabled={anyBusy || selection?.status !== "Authorized"} />
+        <button className="quiet-button" type="button" onClick={onAmend} disabled={anyBusy || selection?.status !== "Authorized"} title={selection?.status === "Authorized" ? undefined : "Needs an authorized, uncaptured quote."}>Apply</button>
+      </label>
+    </div>
+    {expired && <p className="trial-result"><CheckCircle2 size={15} /> The clock is past the signed validity date. Search, authorization and capture are all blocked.</p>}
+    {trial && <p className="trial-result"><CheckCircle2 size={15} /> <strong>Rejected as intended:</strong> {trial.reason}</p>}
+  </section>;
 }
 
-function Status({ value }) {
-  return <span className={`status ${value.toLowerCase()}`}>{value}</span>;
+function DecisionReport({ report }) {
+  return <section className={`operations-card decision-report ${report.status}`}>
+    <div className="card-heading"><div><ClipboardList size={17} /><span><strong>{report.title}</strong><small>{report.summary}</small></span></div></div>
+    <div className="report-grid"><div><span>Mandate</span><strong>{report.draft?.route}</strong><small>{report.draft?.tickets} ticket(s) · US${money(report.draft?.totalBudget)} total cap</small></div><div><span>Decision</span><strong>{report.decision?.selectedMerchant ?? "No eligible seller"}</strong><small>{report.decision?.rationale}</small></div><div><span>Authorization</span><strong>{report.authorization ? "On-chain quote bound" : "None created"}</strong><small>{report.authorization ? shortHash(report.authorization.checkoutHash) : "No mock USD moved"}</small></div></div>
+    {report.settlement && <div className="settlement"><strong>Settlement complete: US${money(report.settlement.amount)}</strong>{Object.entries(report.settlement.balances).map(([wallet, movement]) => <span key={wallet}>{wallet}: {movement.before} &rarr; {movement.after} ({movement.delta})</span>)}</div>}
+  </section>;
+}
+
+/**
+ * The latest step, with the rest one click away.
+ *
+ * The full trail is the point of the demo, but printing every entry pushed the
+ * operations pane past a screen and buried whatever just happened. The newest
+ * entry is what an operator is actually looking at.
+ *
+ * The step count is the number the room is meant to leave with, so it is set as
+ * a figure and not buried in a subtitle nobody can read from the back.
+ */
+function AuditTrail({ audit }) {
+  const [expanded, setExpanded] = useState(false);
+  const entries = audit.slice().reverse();
+  if (entries.length === 0) return null;
+  const shown = expanded ? entries : entries.slice(0, 1);
+
+  return (
+    <section className="operations-card audit-card">
+      <div className="card-heading">
+        <div><ClipboardList size={17} /><span><strong>Auditor trail</strong></span></div>
+        <div className="audit-count">
+          <span className="count-pill">{entries.length}<small>steps</small></span>
+          {entries.length > 1 && (
+            <button className="quiet-button" type="button" onClick={() => setExpanded((open) => !open)}>
+              {expanded ? "Latest only" : "Show all"}
+            </button>
+          )}
+        </div>
+      </div>
+      <ol>
+        {shown.map((entry, index) => (
+          <li key={`${entry.type}-${index}`}>
+            <strong>{readable(entry.type)}</strong>
+            <span>{entry.detail}</span>
+            {entry.transactionHash && <code>{shortHash(entry.transactionHash)}</code>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function OperationsEmpty() {
+  return <div className="ops-empty"><Plane size={30} /><h2>Ready for a safe flight purchase.</h2><p>Search, verification, capture and the auditor record appear here as the flow reaches them.</p></div>;
+}
+
+function readable(value) {
+  return String(value).replaceAll("_", " ").replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 export default App;

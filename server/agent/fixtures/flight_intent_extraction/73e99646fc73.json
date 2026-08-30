@@ -1,0 +1,41 @@
+{
+  "op": "flight_intent_extraction",
+  "user": "Human: How much is a flight to Cordoba?\nHuman: I'm departing from Buenos Aires",
+  "recordedAt": "2026-08-30T14:08:05.967Z",
+  "response": {
+    "status": "clarification_needed",
+    "commitment": "exploratory",
+    "natural_language_description": "How much is a flight to Cordoba? I'm departing from Buenos Aires",
+    "trip": {
+      "origin": "Buenos Aires",
+      "destination": "Cordoba",
+      "departure_date": null,
+      "passengers": null,
+      "cabin": null,
+      "max_stops": null,
+      "airline_preference": null
+    },
+    "constraints": {
+      "budget_usd": null,
+      "quality_preference": "cheapest",
+      "authorization_expires_at": null
+    },
+    "questions": [
+      {
+        "field": "trip.departure_date",
+        "question": "What is your departure date?",
+        "options": []
+      },
+      {
+        "field": "trip.passengers",
+        "question": "How many passengers will be traveling?",
+        "options": []
+      },
+      {
+        "field": "constraints.budget_usd",
+        "question": "Do you have a budget for this flight?",
+        "options": []
+      }
+    ]
+  }
+}

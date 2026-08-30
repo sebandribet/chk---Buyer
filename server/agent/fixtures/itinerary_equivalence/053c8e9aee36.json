@@ -1,0 +1,9 @@
+{
+  "op": "itinerary_equivalence",
+  "user": "{\n  \"requested\": {\n    \"origin\": \"Buenos Aires\",\n    \"destination\": \"Sao Paulo\",\n    \"departureDate\": \"2026-08-31\",\n    \"cabin\": null,\n    \"maxStops\": null,\n    \"passengers\": 1\n  },\n  \"offered\": {\n    \"quoteId\": \"SH-FF-GRU-0915-1830\",\n    \"origin\": \"Buenos Aires\",\n    \"destination\": \"Sao Paulo\",\n    \"departureDate\": \"2026-09-15\",\n    \"departureTime\": \"18:30\",\n    \"arrivalTime\": \"23:55\",\n    \"cabin\": \"Economy\",\n    \"stops\": 1,\n    \"seats\": 9,\n    \"unitPriceUsd\": 221\n  },\n  \"differences\": [\n    {\n      \"term\": \"departureDate\",\n      \"requested\": \"2026-08-31\",\n      \"offered\": \"2026-09-15\"\n    }\n  ]\n}",
+  "recordedAt": "2026-08-30T15:06:43.394Z",
+  "response": {
+    "acceptable": false,
+    "reason": "The offered itinerary departs on 2026-09-15, which does not match the requested departure date of 2026-08-31, and no date flexibility was indicated."
+  }
+}
