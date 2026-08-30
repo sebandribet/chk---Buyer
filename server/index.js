@@ -172,7 +172,7 @@ app.post("/api/demo/agent/purchase", async (request, response) => {
   }
 });
 
-app.get("/api/demo/merchant/verify/:purchaseId", async (request, response) => {
+app.post("/api/demo/merchant/verify/:purchaseId", async (request, response) => {
   try {
     response.json(await demoChain.verifyPurchase(request.params.purchaseId));
   } catch (error) {
@@ -206,7 +206,15 @@ app.post("/api/demo/mandate/revoke", async (_request, response) => {
 
 app.post("/api/demo/purchase/:purchaseId/release", async (request, response) => {
   try {
-    response.json(await demoChain.releasePurchase(request.params.purchaseId));
+    response.json(await demoChain.releasePurchase(request.params.purchaseId, "buyer"));
+  } catch (error) {
+    demoError(response, error);
+  }
+});
+
+app.post("/api/demo/purchase/:purchaseId/release-demo", async (request, response) => {
+  try {
+    response.json(await demoChain.releasePurchase(request.params.purchaseId, "agent"));
   } catch (error) {
     demoError(response, error);
   }

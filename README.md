@@ -119,13 +119,27 @@ Start the server with `npm start`, then use these endpoints from the UI, agent o
 | Complete Marta's mock KYC/login and enroll the payment token | `POST /api/demo/kyc/login` | — |
 | Sign Marta's mandate using the enrolled payment token | `POST /api/demo/mandate` | `{ "quantity": 1, "maxUnitPrice": "150", "budget": "150" }` |
 | Agent attempts a purchase | `POST /api/demo/agent/purchase` | `{ "orderReference": "VuelaYa-130", "quantity": 1, "unitPrice": "130" }` |
-| Merchant verifies before accepting | `GET /api/demo/merchant/verify/:purchaseId` | — |
+| Merchant verifies before accepting | `POST /api/demo/merchant/verify/:purchaseId` | — |
 | Merchant captures a verified authorization | `POST /api/demo/merchant/capture/:purchaseId` | — |
 | Owner lowers price cap live | `POST /api/demo/mandate/price-cap` | `{ "maxUnitPrice": "120" }` |
 | Owner revokes mandate live | `POST /api/demo/mandate/revoke` | — |
+| Owner releases an unused authorization | `POST /api/demo/purchase/:purchaseId/release` | — |
+| Demo agent releases an unused trial authorization | `POST /api/demo/purchase/:purchaseId/release-demo` | — |
 | Inspect mandate, balances and audit log | `GET /api/demo/state` | — |
 
 The merchant-verification response is computed from live chain state: mandate activity and revision, KYC-linked payment-token validity, merchant match, a matching merchant-signed checkout hash, reserved one-use authorization, quote expiry, and virtual-card status. A changed price cap invalidates an unused credential from an earlier mandate revision; revocation blocks all later reservations and capture.
+
+### Judge-ready frontend
+
+Run `npm run dev`, then open `http://localhost:5173/?tab=demo`. The Spanish demo UI exposes the complete circuit and a judge control panel without requiring a contract console:
+
+1. initialize the local stack, complete Marta's mock KYC/payment login, and sign the mandate;
+2. authorize, verify, and capture VuelaYa's eligible US$130 checkout;
+3. enter any price to test an unrehearsed purchase attempt;
+4. change the live unit-price cap or revoke the mandate, then try again;
+5. switch among Marta, VuelaYa, and auditor views to inspect the appropriate evidence.
+
+Rejected attempts are recorded as off-chain decision evidence with `sin transacción`: the contract reverted, so no transaction was confirmed and no money moved. The UI labels the authorization model as inspired by AP2/ACP rather than claiming protocol certification.
 
 ## MVP Demo
 

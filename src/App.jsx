@@ -26,7 +26,7 @@ import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisp
 
 const tabs = [
   { id: "chat", label: "Chat", icon: MessageSquare },
-  { id: "demo", label: "Live demo", icon: ShieldCheck },
+  { id: "demo", label: "Prueba en vivo", icon: ShieldCheck },
   { id: "mandates", label: "Mandatos", icon: ClipboardList },
   { id: "history", label: "Historial", icon: History },
   { id: "account", label: "Cuenta", icon: WalletCards },
@@ -219,7 +219,7 @@ const mandateActivity = {
     { time: "10:24", title: "Compra confirmada", detail: "Distribuidora Centro confirmó la orden OC-2841.", type: "success" },
     { time: "10:23", title: "Tarjeta virtual generada", detail: "Tarjeta •••• 4821 por $142.000, válida para un solo uso.", type: "card" },
     { time: "10:23", title: "Autorización registrada", detail: "Transacción mock confirmada en Polygon · Demo.", type: "chain" },
-    { time: "10:22", title: "Saldo retirado", detail: "$142.000 retirados de la cuenta operativa.", type: "account" },
+    { time: "10:22", title: "Pago preparado", detail: "La autorización quedó lista; el saldo todavía no se movió.", type: "account" },
     { time: "10:22", title: "Proveedor cambiado", detail: "El agente eligió Distribuidora Centro en lugar de PackAR.", type: "supplier" },
     { time: "10:21", title: "8 ofertas encontradas", detail: "Se compararon precio, disponibilidad y entrega.", type: "search" },
     { time: "10:20", title: "Búsqueda iniciada", detail: "Ejecución programada por cron.", type: "search" },
@@ -257,7 +257,10 @@ const currency = new Intl.NumberFormat("es-AR", {
 });
 
 function App() {
-  const [activeTab, setActiveTab] = useState("chat");
+  const [activeTab, setActiveTab] = useState(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    return tabs.some((tab) => tab.id === requestedTab) ? requestedTab : "chat";
+  });
   const [messages, setMessages] = useState(initialMessages);
   const [draftApproved, setDraftApproved] = useState(false);
   const [mandates, setMandates] = useState(initialMandates);
@@ -266,11 +269,13 @@ function App() {
   function navigateToTab(tab) {
     setActiveTab(tab);
     setSelectedMandateId(null);
+    replaceTabInUrl(tab);
   }
 
   function openMandate(mandateId) {
     setActiveTab("mandates");
     setSelectedMandateId(mandateId);
+    replaceTabInUrl("mandates");
   }
 
   return (
@@ -319,6 +324,13 @@ function App() {
   );
 }
 
+function replaceTabInUrl(tab) {
+  const url = new URL(window.location.href);
+  if (tab === "chat") url.searchParams.delete("tab");
+  else url.searchParams.set("tab", tab);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function Header({ activeTab, onTabChange }) {
   return (
     <header className="header">
@@ -334,6 +346,7 @@ function Header({ activeTab, onTabChange }) {
                 key={tab.id}
                 className={activeTab === tab.id ? "active" : ""}
                 onClick={() => onTabChange(tab.id)}
+                aria-current={activeTab === tab.id ? "page" : undefined}
               >
                 <Icon size={16} />
                 {tab.label}
@@ -581,11 +594,11 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
   const lastPurchase = relatedPurchases[0];
   const executionSteps = lastPurchase ? [
     { label: "chk! it out · oferta elegida", detail: `${lastPurchase.quantity} a ${lastPurchase.supplier}` },
-    { label: "write the chk! · saldo retirado", detail: `${currency.format(lastPurchase.total)} → chk! fund` },
+    { label: "write the chk! · checkout cerrado", detail: `${currency.format(lastPurchase.total)} autorizados · saldo sin cambios` },
     { label: "Autorización registrada", detail: `Polygon · Demo · ${lastPurchase.transaction}` },
     { label: "Tarjeta virtual generada", detail: `${lastPurchase.card} · un solo uso` },
     { label: "Mandato validado por el vendedor", detail: "Activo · agente y monto autorizados" },
-    { label: "Compra confirmada", detail: lastPurchase.id },
+    { label: "Captura y compra confirmada", detail: `${lastPurchase.id} · el débito ocurre recién aquí` },
   ] : [];
 
   return (
@@ -793,19 +806,19 @@ function AccountPage() {
           <div className="payment-method-mock">
             <span>Tarjeta empresa</span>
             <strong>•••• 4242</strong>
-            <small>Se usa para fondear chk! fund cuando el agente decide comprar.</small>
+            <small>Permanece tokenizada. Solo se debita cuando el comercio verificado captura una autorización válida.</small>
           </div>
           <button className="account-secondary-button">Cambiar método</button>
         </article>
 
         <article className="account-panel fund-panel">
-          <div className="account-card-heading"><WalletCards size={18} /><span>CHK! FUND</span></div>
+          <div className="account-card-heading"><WalletCards size={18} /><span>AUTORIZACIONES DE PAGO</span></div>
           <div className="fund-stats">
-            <div><span>En proceso</span><strong>{currency.format(0)}</strong></div>
-            <div><span>Ejecutado este mes</span><strong>{currency.format(240400)}</strong></div>
+            <div><span>Pendiente de captura</span><strong>{currency.format(0)}</strong></div>
+            <div><span>Capturado este mes</span><strong>{currency.format(240400)}</strong></div>
             <div><span>Reintegros</span><strong>{currency.format(0)}</strong></div>
           </div>
-          <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar y se consumen al emitir la tarjeta virtual.</p>
+          <p>Crear un mandato o emitir una autorización no inmoviliza fondos. El débito y el pago al comercio ocurren juntos durante la captura.</p>
         </article>
 
         <article className="account-panel card-policy-panel">
@@ -824,11 +837,11 @@ function AccountPage() {
         <div className="money-flow">
           <div><i>1</i><span><strong>El agente decide</strong><small>La oferta cumple el mandato</small></span></div>
           <ArrowRight size={17} />
-          <div><i>2</i><span><strong>Cuenta → chk! fund</strong><small>El saldo se retira</small></span></div>
+          <div><i>2</i><span><strong>Checkout firmado</strong><small>El comercio fija la orden exacta</small></span></div>
           <ArrowRight size={17} />
-          <div><i>3</i><span><strong>Polygon</strong><small>Registra la autorización</small></span></div>
+          <div><i>3</i><span><strong>Autorización</strong><small>Polygon registra un permiso de un uso</small></span></div>
           <ArrowRight size={17} />
-          <div><i>4</i><span><strong>Tarjeta virtual</strong><small>Paga al productor</small></span></div>
+          <div><i>4</i><span><strong>Captura del comercio</strong><small>Débito y pago atómicos</small></span></div>
         </div>
       </article>
 
@@ -1024,7 +1037,7 @@ function NotificationPreferences() {
     ["Compra realizada", "Confirmación y detalle de cada orden", true],
     ["Proveedor cambiado", "Proveedor anterior, nuevo y motivo", true],
     ["Compra fallida", "Errores de checkout o rechazo", true],
-    ["Saldo insuficiente", "El agente no pudo retirar los fondos", true],
+    ["Saldo insuficiente", "El comercio no pudo capturar el pago", true],
     ["Fallo blockchain", "La autorización no pudo registrarse", true],
     ["Tarjeta virtual fallida", "No se pudo emitir o utilizar la tarjeta", true],
     ["Sin ofertas válidas", "Ninguna opción cumplió el mandato", true],
@@ -1063,22 +1076,36 @@ function LiveDemoPage() {
   const [purchaseId, setPurchaseId] = useState(null);
   const [verification, setVerification] = useState(null);
   const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState("Start the local chain, then complete KYC payment login before signing a mandate.");
+  const [perspective, setPerspective] = useState("buyer");
+  const [trialPrice, setTrialPrice] = useState("300");
+  const [newLimit, setNewLimit] = useState("120");
+  const [trialResult, setTrialResult] = useState(null);
+  const [attempts, setAttempts] = useState([]);
+  const [feedback, setFeedback] = useState({
+    tone: "info",
+    title: "Todo listo para empezar",
+    detail: "Iniciá el circuito local. Después, cada botón ejecuta una operación real contra el backend de pagos de la demo.",
+  });
+
+  function showFeedback(tone, title, detail) {
+    setFeedback({ tone, title, detail });
+  }
 
   async function startDemo() {
     setAction("start");
-    setNotice("");
     setPurchaseId(null);
     setVerification(null);
+    setTrialResult(null);
+    setAttempts([]);
     try {
       const state = await demoRequest("/api/demo/reset", {
         method: "POST",
-        body: JSON.stringify({ product: "flight-cordoba", quantity: 1, maxUnitPrice: "150", budget: "150" }),
+        body: JSON.stringify({ product: "flight-cordoba", quantity: 3, maxUnitPrice: "150", budget: "450" }),
       });
       setDemo(state);
-      setNotice(`Local payment stack deployed in block ${state.network.latestBlock}. No mandate or payment credential exists yet.`);
+      showFeedback("success", "Circuito local iniciado", `Contratos desplegados en el bloque ${state.network.latestBlock}. Todavía no hay mandato ni credencial de pago.`);
     } catch (error) {
-      setNotice(`Backend unavailable: ${error.message}`);
+      showFeedback("error", "Backend no disponible", error.message);
     } finally {
       setAction(null);
     }
@@ -1086,13 +1113,12 @@ function LiveDemoPage() {
 
   async function completeKycLogin() {
     setAction("kyc");
-    setNotice("");
     try {
       const state = await demoRequest("/api/demo/kyc/login", { method: "POST" });
       setDemo(state);
-      setNotice(`KYC payment login confirmed in block ${state.network.latestBlock}. Marta's opaque payment token is ready for capture; no money moved.`);
+      showFeedback("success", "Marta verificada", `El token de pago quedó enrolado en el bloque ${state.network.latestBlock}. No se expuso la tarjeta ni se movió dinero.`);
     } catch (error) {
-      setNotice(error.message);
+      showFeedback("error", "No se pudo completar la verificación", explainDemoError(error.message));
     } finally {
       setAction(null);
     }
@@ -1100,16 +1126,15 @@ function LiveDemoPage() {
 
   async function createMandate() {
     setAction("mandate");
-    setNotice("");
     try {
       const state = await demoRequest("/api/demo/mandate", {
         method: "POST",
-        body: JSON.stringify({ quantity: 1, maxUnitPrice: "150", budget: "150" }),
+        body: JSON.stringify({ quantity: 3, maxUnitPrice: "150", budget: "450" }),
       });
       setDemo(state);
-      setNotice(`Mandate signed in block ${state.network.latestBlock}. Marta authorizes one flight to Córdoba up to US$150; no funds are locked.`);
+      showFeedback("success", "Mandato firmado", `Marta autorizó hasta 3 compras a Córdoba por un máximo de US$150 cada una. No se inmovilizaron fondos.`);
     } catch (error) {
-      setNotice(error.message);
+      showFeedback("error", "No se pudo firmar el mandato", explainDemoError(error.message));
     } finally {
       setAction(null);
     }
@@ -1117,7 +1142,6 @@ function LiveDemoPage() {
 
   async function findAndAuthorize() {
     setAction("authorize");
-    setNotice("");
     try {
       const result = await demoRequest("/api/demo/agent/purchase", {
         method: "POST",
@@ -1125,9 +1149,10 @@ function LiveDemoPage() {
       });
       setPurchaseId(result.purchaseId);
       setDemo(result.state);
-      setNotice(`Agent transaction confirmed in block ${result.state.network.latestBlock}. VuelaYa's signed US$130 checkout is bound to the mandate; Marta has not been charged.`);
+      setAttempts((current) => [...current, { id: result.purchaseId, price: "130", status: "authorized", label: "Oferta elegida" }]);
+      showFeedback("success", "Compra autorizada dentro del mandato", `La cotización firmada de VuelaYa quedó vinculada en el bloque ${result.state.network.latestBlock}. El saldo de Marta sigue intacto.`);
     } catch (error) {
-      setNotice(error.message);
+      showFeedback("error", "La oferta no pudo autorizarse", explainDemoError(error.message));
     } finally {
       setAction(null);
     }
@@ -1136,15 +1161,19 @@ function LiveDemoPage() {
   async function verifyPurchase() {
     if (!purchaseId) return;
     setAction("verify");
-    setNotice("");
     try {
-      const result = await demoRequest(`/api/demo/merchant/verify/${purchaseId}`);
+      const result = await demoRequest(`/api/demo/merchant/verify/${purchaseId}`, { method: "POST" });
       setVerification(result);
-      setNotice(result.verified
-        ? "VuelaYa read live chain state and approved every verification check."
-        : "Merchant verification failed. Capture is blocked.");
+      setDemo(await demoRequest("/api/demo/state"));
+      showFeedback(
+        result.verified ? "success" : "error",
+        result.verified ? "VuelaYa verificó la compra" : "La captura quedó bloqueada",
+        result.verified
+          ? "Los 10 controles del comercio pasaron contra el estado actual del mandato."
+          : "Al menos una condición ya no es válida. VuelaYa no puede capturar este pago.",
+      );
     } catch (error) {
-      setNotice(error.message);
+      showFeedback("error", "La verificación del comercio falló", explainDemoError(error.message));
     } finally {
       setAction(null);
     }
@@ -1153,13 +1182,144 @@ function LiveDemoPage() {
   async function capturePurchase() {
     if (!purchaseId) return;
     setAction("capture");
-    setNotice("");
     try {
       const result = await demoRequest(`/api/demo/merchant/capture/${purchaseId}`, { method: "POST" });
       setDemo(result.state);
-      setNotice(`Merchant capture confirmed in block ${result.state.network.latestBlock}. US$130 is now in VuelaYa's account.`);
+      setAttempts((current) => current.map((attempt) => attempt.id === purchaseId ? { ...attempt, status: "settled" } : attempt));
+      showFeedback("success", "Pago capturado y liquidado", `Recién ahora se debitaron US$130 de Marta y se acreditaron a VuelaYa, en el bloque ${result.state.network.latestBlock}.`);
     } catch (error) {
-      setNotice(error.message);
+      setVerification(null);
+      try {
+        setDemo(await demoRequest("/api/demo/state"));
+      } catch {
+        // Keep the capture error visible even if the follow-up state read fails.
+      }
+      showFeedback("error", "La captura fue rechazada", explainDemoError(error.message));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function amendLimit(event) {
+    event.preventDefault();
+    if (!Number.isFinite(Number(newLimit)) || Number(newLimit) <= 0) {
+      showFeedback("error", "Ingresá un límite válido", "El tope debe ser un importe positivo en dólares.");
+      return;
+    }
+    setAction("limit");
+    try {
+      const state = await demoRequest("/api/demo/mandate/price-cap", {
+        method: "POST",
+        body: JSON.stringify({ maxUnitPrice: newLimit }),
+      });
+      setDemo(state);
+      setVerification(null);
+      showFeedback("success", "Límite actualizado en vivo", `El nuevo máximo es US$${newLimit}. La revisión pasó a v${state.mandate.revision}; cualquier autorización anterior debe verificarse otra vez.`);
+    } catch (error) {
+      showFeedback("error", "No se pudo cambiar el límite", explainDemoError(error.message));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function revokeDemoMandate() {
+    setAction("revoke");
+    try {
+      const state = await demoRequest("/api/demo/mandate/revoke", { method: "POST" });
+      setDemo(state);
+      setVerification(null);
+      showFeedback("success", "Mandato revocado", "La revocación ya está en el contrato. Las compras capturadas permanecen, pero todo intento nuevo debe fallar.");
+    } catch (error) {
+      showFeedback("error", "No se pudo revocar", explainDemoError(error.message));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function runTrialAttempt(event, priceOverride) {
+    event?.preventDefault();
+    const price = String(priceOverride ?? trialPrice).trim();
+    if (!Number.isFinite(Number(price)) || Number(price) <= 0) {
+      showFeedback("error", "Ingresá un precio válido", "El intento debe usar un importe positivo en dólares.");
+      return;
+    }
+    setTrialPrice(price);
+    setAction("trial");
+    setTrialResult(null);
+    const orderReference = `VuelaYa-TRIAL-${price}-${Date.now()}`;
+    try {
+      const result = await demoRequest("/api/demo/agent/purchase", {
+        method: "POST",
+        body: JSON.stringify({ orderReference, quantity: 1, unitPrice: price }),
+      });
+      const nextAttempt = { id: result.purchaseId, price, status: "authorized", label: "Intento libre" };
+      try {
+        const released = await demoRequest(`/api/demo/purchase/${result.purchaseId}/release-demo`, { method: "POST" });
+        const releasedAttempt = { ...nextAttempt, status: "released", reason: "Cumplió las reglas y fue autorizado. La demo liberó luego la credencial sin usar para conservar capacidad; no se movió dinero." };
+        setDemo(released);
+        setAttempts((current) => [...current, releasedAttempt]);
+        setTrialResult(releasedAttempt);
+        showFeedback("warning", "Intento válido; autorización liberada", releasedAttempt.reason);
+      } catch (releaseError) {
+        setDemo(result.state);
+        setAttempts((current) => [...current, nextAttempt]);
+        setTrialResult(nextAttempt);
+        showFeedback("warning", "El intento fue autorizado", `US$${price} cumple el mandato actual. La limpieza automática falló: ${explainDemoError(releaseError.message)}. Podés anular la autorización manualmente.`);
+      }
+    } catch (error) {
+      const reason = explainDemoError(error.message, price, demo?.mandate?.maxUnitPrice);
+      const expectedRejection = isExpectedPolicyRejection(error.message);
+      const failedAttempt = { id: orderReference, price, status: expectedRejection ? "rejected" : "error", label: "Intento libre", reason };
+      setAttempts((current) => [...current, failedAttempt]);
+      setTrialResult(failedAttempt);
+      try {
+        setDemo(await demoRequest("/api/demo/state"));
+      } catch {
+        // The rejection result is still useful even if the state refresh fails.
+      }
+      showFeedback(
+        expectedRejection ? "success" : "error",
+        expectedRejection ? "Bloqueado como corresponde" : "No pudimos comprobar el intento",
+        reason,
+      );
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function releaseTrialAuthorization() {
+    if (trialResult?.status !== "authorized") return;
+    setAction("release");
+    try {
+      const result = await demoRequest(`/api/demo/purchase/${trialResult.id}/release`, { method: "POST" });
+      const releasedAttempt = { ...trialResult, status: "released", reason: "La autorización sin usar fue anulada y la capacidad volvió al mandato. No se movió dinero." };
+      setDemo(result);
+      setTrialResult(releasedAttempt);
+      setAttempts((current) => current.map((attempt) => attempt.id === trialResult.id ? releasedAttempt : attempt));
+      showFeedback("success", "Autorización liberada", releasedAttempt.reason);
+    } catch (error) {
+      showFeedback("error", "No se pudo liberar la autorización", explainDemoError(error.message));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function releasePrimaryAuthorization() {
+    if (!purchaseId || isCaptured) return;
+    setAction("release-primary");
+    try {
+      const state = await demoRequest(`/api/demo/purchase/${purchaseId}/release`, { method: "POST" });
+      setDemo(state);
+      setAttempts((current) => current.map((attempt) => attempt.id === purchaseId ? {
+        ...attempt,
+        status: "released",
+        reason: "La autorización quedó inválida por el cambio de estado y fue liberada sin mover dinero.",
+      } : attempt));
+      setPurchaseId(null);
+      setVerification(null);
+      showFeedback("success", "Autorización inválida liberada", "La capacidad volvió al mandato. El agente puede buscar y autorizar una oferta bajo la revisión actual.");
+    } catch (error) {
+      showFeedback("error", "No se pudo liberar la autorización", explainDemoError(error.message));
     } finally {
       setAction(null);
     }
@@ -1168,114 +1328,345 @@ function LiveDemoPage() {
   const balances = demo?.balances || { buyer: "—", cardProcessor: "—", merchant: "—" };
   const hasKycPayment = Boolean(demo?.kyc?.captureReady);
   const hasMandate = Boolean(demo?.mandate);
+  const mandateActive = demo?.mandate?.status === "Active";
+  const mandateExpired = demo?.mandate?.status === "Expired";
+  const mandateStateLabel = !hasMandate ? "Sin firmar" : mandateActive ? "Activo" : mandateExpired ? "Vencido" : "Revocado";
+  const mandateStateClass = !hasMandate ? "pending" : mandateActive ? "active" : mandateExpired ? "expired" : "revoked";
   const isCaptured = Boolean(demo) && Number(balances.merchant) > 0;
-  const canVerify = Boolean(purchaseId) && !verification;
+  const canVerify = Boolean(purchaseId) && !verification && !isCaptured;
   const canCapture = Boolean(verification?.verified) && !isCaptured;
-  const step = !demo ? 1 : !hasKycPayment ? 2 : !hasMandate ? 3 : !purchaseId ? 4 : !verification ? 5 : !isCaptured ? 6 : 7;
+  const step = !demo ? 1 : !hasKycPayment ? 2 : !hasMandate ? 3 : !purchaseId ? 4 : isCaptured ? 7 : !verification ? 5 : 6;
+  const currentUnitLimit = Number(demo?.mandate?.maxUnitPrice || 150);
+  const featuredOfferWithinLimit = currentUnitLimit >= 130;
+  const featuredOfferHasCapacity = Number(demo?.mandate?.remainingQuantity || 0) >= 1
+    && Number(demo?.mandate?.remainingBudget || 0) >= 130;
+  const featuredOfferEligible = mandateActive && featuredOfferWithinLimit && featuredOfferHasCapacity;
+  const featuredOfferHeading = !hasMandate
+    ? "Una oferta lista para evaluar"
+    : featuredOfferEligible
+      ? "La mejor oferta válida apareció"
+      : "La oferta dejó de ser elegible";
+  const featuredOfferStatus = purchaseId
+    ? "VuelaYa · directo · US$130. Cumplió todas las reglas al momento de autorizarse."
+    : !hasMandate
+      ? "VuelaYa · directo · US$130. Se evaluará cuando Marta firme el mandato."
+      : !mandateActive
+        ? `VuelaYa · directo · US$130. El mandato está ${mandateStateLabel.toLowerCase()}.`
+        : !featuredOfferWithinLimit
+      ? `VuelaYa · directo · US$130. Supera el tope vigente de US$${demo?.mandate?.maxUnitPrice}.`
+      : !featuredOfferHasCapacity && hasMandate
+        ? "VuelaYa · directo · US$130. El mandato ya no tiene cantidad o presupuesto suficiente."
+        : "VuelaYa · directo · US$130. Cumple destino, comercio, cantidad, vigencia y precio.";
+  const checkoutMandateState = !hasMandate ? "Pendiente" : !mandateActive ? mandateStateLabel : purchaseId ? "Closed · orden definida" : "Open · buscando oferta";
+  const paymentMandateState = !hasMandate ? "Pendiente" : isCaptured ? "Consumido" : !mandateActive ? mandateStateLabel : purchaseId ? "Closed · un solo uso" : "Open · sin cargo";
 
   return (
-    <section className="page live-demo-page">
+    <section className="page live-demo-page" aria-busy={action !== null}>
       <div className="page-header live-demo-header">
         <div>
-          <span className="eyebrow">LIVE BACKEND DEMO · LOCAL EVM CHAIN</span>
-          <h1>Autonomous purchase, proven step by step.</h1>
-          <p>This is not a simulated progress bar. Every step below calls the local payment backend, submits a contract transaction, and reads the resulting state back from the chain.</p>
+          <span className="eyebrow">CHALLENGE 1 · DEMO OPERABLE</span>
+          <h1>Una compra agéntica segura, comprobada en vivo.</h1>
+          <p>Marta delega una compra sin entregar su tarjeta. CHK Buyer decide, VuelaYa verifica y el contrato hace cumplir cada límite.</p>
         </div>
         <button className="secondary-button" onClick={startDemo} disabled={action !== null}>
-          <RefreshCw size={15} /> {action === "start" ? "Deploying..." : demo ? "Reset local chain" : "Start local chain"}
+          <RefreshCw className={action === "start" ? "spin" : ""} size={15} /> {action === "start" ? "Iniciando..." : demo ? "Reiniciar circuito" : "Iniciar circuito"}
         </button>
       </div>
 
-      <div className="demo-stepper">
-        {[[1, "Start chain"], [2, "KYC + payment token"], [3, "Sign mandate"], [4, "Agent binds checkout"], [5, "Merchant verifies"], [6, "Capture and pay"]].map(([number, label]) => <div key={number} className={step > number ? "done" : step === number ? "current" : ""}><b>{step > number ? "✓" : number}</b><span>{label}</span></div>)}
+      <div className="demo-stepper" aria-label="Progreso del circuito">
+        {[[1, "Iniciar"], [2, "Verificar a Marta"], [3, "Firmar mandato"], [4, "Autorizar oferta"], [5, "Verificar comercio"], [6, "Capturar pago"]].map(([number, label]) => <div key={number} className={step > number ? "done" : step === number ? "current" : ""}><b>{step > number ? "✓" : number}</b><span>{label}</span></div>)}
       </div>
 
-      <div className="live-demo-mandate">
-        <div><span>BUYER + KYC LOGIN</span><strong>Marta · mock business bank account</strong><code>{demo?.kyc?.status || "not started"} · {shortAddress(demo?.identities?.owner)}</code></div>
-        <div><span>MANDATE</span><strong>1 Córdoba flight · max US$ {demo?.mandate?.maxUnitPrice || "150.0"}</strong><code>revision {demo?.mandate?.revision || "—"} · {demo?.mandate?.status || "not signed"}</code></div>
-        <div><span>PURCHASING AGENT</span><strong>CHK Buyer · separate wallet</strong><code>{shortAddress(demo?.identities.agent)}</code></div>
-        <div><span>APPROVED MERCHANT</span><strong>VuelaYa</strong><code>{shortAddress(demo?.identities.merchant)}</code></div>
+      <div className={`demo-feedback ${feedback.tone}`} role="status" aria-live="polite">
+        <span>{feedback.tone === "error" ? "ACCIÓN BLOQUEADA" : feedback.tone === "warning" ? "RESULTADO DEL SISTEMA" : "ESTADO EN VIVO"}</span>
+        <div><strong>{feedback.title}</strong><p>{feedback.detail}</p></div>
       </div>
+
+      <section className="demo-case-card">
+        <div className="demo-case-heading">
+          <div>
+            <span>MANDATO DE MARTA</span>
+            <h2>Vuelos Buenos Aires → Córdoba</h2>
+            <p>Comprar cuando el precio sea de hasta US${demo?.mandate?.maxUnitPrice || "150.0"}, máximo 3 veces, durante los próximos 30 días.</p>
+          </div>
+          <div className={`demo-status ${mandateStateClass}`}>
+            <i />{mandateStateLabel}
+          </div>
+        </div>
+        <div className="demo-case-facts">
+          <div><span>TOPE UNITARIO</span><strong>US${demo?.mandate?.maxUnitPrice || "150.0"}</strong><small>editable en vivo</small></div>
+          <div><span>CAPACIDAD RESTANTE</span><strong>{demo?.mandate?.remainingQuantity || "3"} vuelos</strong><small>presupuesto US${demo?.mandate?.remainingBudget || "450.0"}</small></div>
+          <div><span>AGENTE AUTORIZADO</span><strong>CHK Buyer</strong><small>{shortAddress(demo?.identities?.agent)}</small></div>
+          <div><span>COMERCIO AUTORIZADO</span><strong>VuelaYa</strong><small>{shortAddress(demo?.identities?.merchant)}</small></div>
+        </div>
+        <div className="protocol-stages">
+          <div><span>CHECKOUT MANDATE</span><strong>{checkoutMandateState}</strong><small>Restricción → orden exacta</small></div>
+          <ArrowRight size={16} />
+          <div><span>PAYMENT MANDATE</span><strong>{paymentMandateState}</strong><small>Token acotado → captura</small></div>
+          <p>Modelo propio inspirado en AP2/ACP; la demo no afirma compatibilidad certificada.</p>
+        </div>
+      </section>
 
       <section className="live-demo-actions demo-setup-actions">
         <article>
-          <span>STEP 2 · BUYER KYC / PAYMENT LOGIN</span>
-          <p>KYC verifies Marta and saves only an opaque card-on-file token. This permits instant capture later, but stores no raw card data and locks no funds.</p>
+          <span>PASO 2 · IDENTIDAD Y MÉTODO DE PAGO</span>
+          <h2>Verificar a Marta</h2>
+          <p>Enrola un token opaco vinculado al KYC. No guarda el número de tarjeta y no bloquea fondos.</p>
           <button className="secondary-button" onClick={completeKycLogin} disabled={!demo || hasKycPayment || action !== null}>
-            <ShieldCheck size={15} /> {action === "kyc" ? "Enrolling payment token..." : hasKycPayment ? "KYC payment token ready" : "Complete KYC payment login"}
+            <ShieldCheck size={15} /> {action === "kyc" ? "Verificando..." : hasKycPayment ? "Identidad verificada" : "Completar KYC + token"}
           </button>
         </article>
         <article>
-          <span>STEP 3 · HUMAN SIGNS MANDATE</span>
-          <p>Marta delegates one specific flight purchase to CHK Buyer. The contract binds the agent, merchant, product rule, price cap, KYC reference, and revocation state.</p>
+          <span>PASO 3 · CONSENTIMIENTO HUMANO</span>
+          <h2>Firmar el mandato</h2>
+          <p>Vincula agente, comercio, producto, cantidad, presupuesto, tope, vigencia y credencial KYC.</p>
           <button className="secondary-button" onClick={createMandate} disabled={!hasKycPayment || hasMandate || action !== null}>
-            <CheckCircle2 size={15} /> {action === "mandate" ? "Signing mandate..." : hasMandate ? "Mandate signed" : "Sign mandate"}
+            <CheckCircle2 size={15} /> {action === "mandate" ? "Firmando..." : hasMandate ? "Mandato firmado" : "Revisar y firmar"}
           </button>
         </article>
       </section>
 
       <div className="live-demo-offer">
-        <div className="offer-copy"><span>AGENT DISCOVERY RESULT</span><h2>Buenos Aires → Córdoba</h2><p>VuelaYa · US$130 · below Marta’s US$150 mandate limit.</p></div>
-        <div className="offer-price"><span>US$130</span><small>best eligible offer</small></div>
-        <button className="primary-button" onClick={findAndAuthorize} disabled={!hasMandate || action !== null || Boolean(purchaseId)}>
-          <CheckCircle2 size={15} /> {action === "authorize" ? "Binding checkout..." : purchaseId ? "Checkout bound" : "Agent buys automatically"}
+        <div className="offer-copy"><span>PASO 4 · DECISIÓN DEL AGENTE</span><h2>{featuredOfferHeading}</h2><p>{featuredOfferStatus}</p></div>
+        <div className="offer-price"><span>US$130</span><small className={hasMandate && !featuredOfferEligible ? "over-limit" : ""}>{hasMandate && !mandateActive ? mandateStateLabel.toLowerCase() : !featuredOfferWithinLimit ? `US$${formatDemoAmount(130 - currentUnitLimit)} sobre el tope` : !featuredOfferHasCapacity && hasMandate ? "sin capacidad disponible" : `US$${formatDemoAmount(currentUnitLimit - 130)} debajo del tope`}</small></div>
+        <button className="primary-button" onClick={findAndAuthorize} disabled={!mandateActive || !featuredOfferEligible || action !== null || Boolean(purchaseId)}>
+          <CheckCircle2 size={15} /> {action === "authorize" ? "Autorizando..." : purchaseId ? "Checkout vinculado" : !hasMandate ? "Esperando mandato" : !mandateActive ? mandateStateLabel : !featuredOfferWithinLimit ? "Fuera del límite" : !featuredOfferHasCapacity ? "Sin capacidad" : "Ejecutar compra autónoma"}
         </button>
       </div>
 
-      <section className="money-flow" aria-label="Live money movement">
-        <MoneyNode icon={Building2} label="Marta's bank balance" value={`US$${balances.buyer}`} status={isCaptured ? "US$130 debited at capture" : purchaseId ? "Unchanged — capture pending" : "No mandate funds locked"} address={shortAddress(demo?.identities?.owner)} />
-        <FlowArrow active={isCaptured} label="capture-only debit" />
-        <MoneyNode icon={CreditCard} label="KYC-linked one-use credential" value={isCaptured ? "Consumed" : purchaseId ? "US$130 authorized" : "Not issued"} status={isCaptured ? "Used for VuelaYa checkout" : purchaseId ? "No funds held; VuelaYa only" : "Issued after quote binding"} highlighted={Boolean(purchaseId)} address={shortAddress(demo?.contracts?.cardProcessor)} />
-        <FlowArrow active={isCaptured} label="merchant capture" />
-        <MoneyNode icon={Store} label="VuelaYa settlement balance" value={`US$${balances.merchant}`} status={isCaptured ? "Payment received" : "Cannot receive before verification"} highlighted={isCaptured} address={shortAddress(demo?.identities?.merchant)} />
+      <section className="demo-money-flow" aria-label="Movimiento del dinero en vivo">
+        <MoneyNode icon={Building2} label="Saldo de Marta" value={`US$${balances.buyer}`} status={isCaptured ? "US$130 debitados al capturar" : purchaseId ? "Sin cambios · captura pendiente" : "El mandato no inmoviliza fondos"} address={shortAddress(demo?.identities?.owner)} />
+        <FlowArrow active={isCaptured} label="débito solo al capturar" />
+        <MoneyNode icon={CreditCard} label="Credencial de un uso" value={isCaptured ? "Consumida" : purchaseId ? "US$130 autorizados" : "No emitida"} status={isCaptured ? "Usada solo por VuelaYa" : purchaseId ? "Sin fondos retenidos" : "Nace al cerrar el checkout"} highlighted={Boolean(purchaseId)} address={shortAddress(demo?.contracts?.cardProcessor)} />
+        <FlowArrow active={isCaptured} label="captura del comercio" />
+        <MoneyNode icon={Store} label="Saldo de VuelaYa" value={`US$${balances.merchant}`} status={isCaptured ? "Pago recibido" : "No cobra antes de verificar"} highlighted={isCaptured} address={shortAddress(demo?.identities?.merchant)} />
       </section>
 
       <section className="live-demo-actions">
         <article>
-          <span>STEP 5 · LIVE MERCHANT CHECK</span>
-          <p>VuelaYa queries the contract. It must see an active mandate, KYC-linked payment token, matching merchant, current revision, signed checkout hash, and a live one-use credential.</p>
+          <span>PASO 5 · VISTA DEL COMERCIO</span>
+          <h2>Verificar antes de aceptar</h2>
+          <p>VuelaYa consulta el estado vivo: identidad, mandato, revisión, checkout firmado y credencial de un uso.</p>
           <button className="secondary-button" onClick={verifyPurchase} disabled={!canVerify || action !== null}>
-            <ShieldCheck size={15} /> {action === "verify" ? "Reading chain state..." : verification ? "Verification approved" : "Verify mandate live"}
+            <ShieldCheck size={15} /> {action === "verify" ? "Leyendo el contrato..." : verification ? "Verificación completa" : "Verificar mandato en vivo"}
           </button>
         </article>
         <article>
-          <span>STEP 6 · CAPTURE PAYMENT</span>
-          <p>Only a verified merchant can capture. This atomically debits Marta’s tokenized card-on-file and pays VuelaYa in the next block—no pre-funded escrow.</p>
+          <span>PASO 6 · MOVIMIENTO DE DINERO</span>
+          <h2>Capturar el pago</h2>
+          <p>Solo el comercio verificado puede capturar. Débito y acreditación ocurren juntos; no existe escrow prefondado.</p>
           <button className="primary-button" onClick={capturePurchase} disabled={!canCapture || action !== null}>
-            <WalletCards size={15} /> {action === "capture" ? "Capturing on-chain..." : isCaptured ? "Payment settled" : "Capture US$130"}
+            <WalletCards size={15} /> {action === "capture" ? "Capturando..." : isCaptured ? "Pago liquidado" : "Capturar US$130"}
           </button>
         </article>
       </section>
 
       {verification && (
         <div className="verification-result">
-          <strong><ShieldCheck size={16} /> Merchant verification {verification.verified ? "passed" : "failed"}</strong>
-          <div>{Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}>{passed ? "✓" : "×"} {humanizeCheck(check)}</span>)}</div>
+          <strong><ShieldCheck size={16} /> Verificación del comercio: {verification.verified ? "aprobada" : "rechazada"}</strong>
+          <div>{Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}>{passed ? "✓" : "×"} {humanizeCheck(check)}</span>)}{!verification.verified && !isCaptured && <button type="button" onClick={releasePrimaryAuthorization} disabled={action !== null}>{action === "release-primary" ? "Liberando..." : "Liberar y volver a buscar"}</button>}</div>
         </div>
       )}
 
-      <p className="live-demo-notice">{notice}</p>
-
-      <section className="backend-proof">
-        <div><span>BACKEND PROOF</span><strong>{demo?.network.name || "Waiting to start the local chain"}</strong><small>chain ID {demo?.network.chainId || "—"} · latest block {demo?.network.latestBlock || "—"}</small></div>
-        <div><span>MANDATE CONTRACT</span><code>{demo?.contracts.vault || "—"}</code></div>
-        <div><span>PAYMENT PROCESSOR CONTRACT</span><code>{demo?.contracts.cardProcessor || "—"}</code></div>
+      <section className="trial-panel">
+        <div className="trial-heading">
+          <div><span>TRIAL BY FIRE</span><h2>Control del jurado</h2><p>Todos los controles llaman al backend real. Probá un monto no ensayado, cambiá el límite o revocá y volvé a intentar.</p></div>
+          <div className={`demo-status ${mandateStateClass}`}><i />{mandateActive ? `Mandato activo · v${demo?.mandate?.revision}` : hasMandate ? `Mandato ${mandateStateLabel.toLowerCase()}` : "Esperando mandato"}</div>
+        </div>
+        <div className="trial-grid">
+          <form onSubmit={runTrialAttempt}>
+            <span>INTENTO LIBRE DEL AGENTE</span>
+            <label htmlFor="trial-price">Precio del vuelo</label>
+            <div className="money-input"><em>US$</em><input id="trial-price" inputMode="decimal" value={trialPrice} onChange={(event) => setTrialPrice(event.target.value)} /></div>
+            <div className="trial-shortcuts"><button type="button" onClick={() => runTrialAttempt(null, "300")} disabled={!hasMandate || action !== null}>Probar US$300</button><button type="button" onClick={() => runTrialAttempt(null, "110")} disabled={!hasMandate || action !== null}>Probar US$110</button></div>
+            <button className="secondary-button" type="submit" disabled={!hasMandate || action !== null}><ShieldCheck size={15} />{action === "trial" ? "Evaluando reglas..." : "Intentar compra"}</button>
+          </form>
+          <form onSubmit={amendLimit}>
+            <span>CAMBIAR REGLAS EN VIVO</span>
+            <label htmlFor="new-limit">Nuevo tope unitario</label>
+            <div className="money-input"><em>US$</em><input id="new-limit" inputMode="decimal" value={newLimit} onChange={(event) => setNewLimit(event.target.value)} /></div>
+            <p>Incrementa la revisión e invalida cualquier credencial anterior que todavía no fue capturada.</p>
+            <button className="secondary-button" type="submit" disabled={!mandateActive || action !== null}><RefreshCw size={15} />{action === "limit" ? "Actualizando..." : "Aplicar nuevo límite"}</button>
+          </form>
+          <article className="revoke-trial-card">
+            <span>REVOCACIÓN INMEDIATA</span>
+            <h3>Marta conserva el control</h3>
+            <p>Revocar bloquea compras nuevas y la captura de credenciales sin usar. No deshace compras ya liquidadas.</p>
+            <button type="button" onClick={revokeDemoMandate} disabled={!mandateActive || action !== null}>{action === "revoke" ? "Revocando..." : hasMandate && !mandateActive ? `Mandato ${mandateStateLabel.toLowerCase()}` : "Revocar ahora"}</button>
+          </article>
+        </div>
+        {trialResult && <div className={`trial-result ${trialResult.status}`}><i>{trialResult.status === "rejected" ? "×" : trialResult.status === "error" ? "!" : trialResult.status === "released" ? "↩" : "✓"}</i><div><span>{attemptStatusLabel(trialResult.status).toUpperCase()}</span><strong>Intento por US${trialResult.price}</strong><p>{trialResult.reason || "Cumple las reglas actuales. La autorización existe, pero el saldo no se mueve hasta la captura."}</p>{trialResult.status === "authorized" && <button type="button" onClick={releaseTrialAuthorization} disabled={action !== null}>{action === "release" ? "Liberando..." : "Anular autorización sin usar"}</button>}</div></div>}
       </section>
 
-      <div className="live-demo-audit">
-        <span>ON-CHAIN TRANSACTION LOG</span>
-        {(demo?.audit || []).map((entry, index) => <div key={`${entry.type}-${index}`}><b>{index + 1}</b><code>{entry.type}</code><p>{entry.detail || entry.orderReference || entry.maxUnitPrice || "contract state changed"}</p><small>block {entry.blockNumber} · {shortAddress(entry.transactionHash)}</small></div>)}
-      </div>
+      <section className="demo-perspectives">
+        <div className="perspectives-heading">
+          <div><span>EVIDENCIA POR ACTOR</span><h2>La misma compra, la vista que cada parte necesita</h2></div>
+          <div className="perspective-tabs" role="tablist" aria-label="Perspectiva de la demo">
+            {demoPerspectives.map((item, index) => <button key={item.id} id={`perspective-tab-${item.id}`} role="tab" aria-controls={`perspective-panel-${item.id}`} aria-selected={perspective === item.id} tabIndex={perspective === item.id ? 0 : -1} className={perspective === item.id ? "active" : ""} onClick={() => setPerspective(item.id)} onKeyDown={(event) => handlePerspectiveKeyDown(event, index, setPerspective)}>{item.label}</button>)}
+          </div>
+        </div>
+
+        {perspective === "buyer" && (
+          <div id="perspective-panel-buyer" className="perspective-grid" role="tabpanel" aria-labelledby="perspective-tab-buyer">
+            <article><span>MI MANDATO</span><strong>{mandateStateLabel}</strong><p>Córdoba · hasta US${demo?.mandate?.maxUnitPrice || "150.0"} · {demo?.mandate?.remainingQuantity || "3"} usos restantes.</p><small>Revisión v{demo?.mandate?.revision || "—"} · vence {formatDemoDate(demo?.mandate?.expiresAt)}</small></article>
+            <article><span>MI MÉTODO DE PAGO</span><strong>{hasKycPayment ? "Token verificado" : "Pendiente de KYC"}</strong><p>La tarjeta cruda nunca se entrega al agente ni se publica en la red.</p><small>{shortAddress(demo?.kyc?.paymentMethodId)}</small></article>
+            <article><span>MI SALDO</span><strong>US${balances.buyer}</strong><p>{isCaptured ? "La compra de US$130 fue debitada durante la captura." : purchaseId ? "La autorización existe; todavía no hubo débito." : "Firmar un mandato no mueve fondos."}</p><small>VuelaYa recibió US${balances.merchant}</small></article>
+            <article className="attempt-summary"><span>MIS ÚLTIMOS RESULTADOS</span>{attempts.length === 0 ? <p>Todavía no hubo intentos de compra.</p> : attempts.slice(-3).reverse().map((attempt) => <div key={attempt.id}><b className={attempt.status}>{attemptStatusLabel(attempt.status)}</b><strong>US${attempt.price}</strong><small>{attempt.reason || attempt.label}</small></div>)}</article>
+          </div>
+        )}
+
+        {perspective === "merchant" && (
+          <div id="perspective-panel-merchant" className="merchant-perspective" role="tabpanel" aria-labelledby="perspective-tab-merchant">
+            <div className="merchant-request"><span>SOLICITUD RECIBIDA</span><h3>CHK Buyer solicita pagar US$130</h3><p>Vuelo Buenos Aires → Córdoba · VuelaYa-COR-130</p><dl><DataRow label="Agente" value={shortAddress(demo?.identities?.agent)} /><DataRow label="Mandato" value={`#1 · revisión ${demo?.mandate?.revision || "—"}`} /><DataRow label="Checkout" value={purchaseId ? shortAddress(purchaseId) : "Pendiente"} /></dl></div>
+            <div className="merchant-verdict"><span>DECISIÓN DEL COMERCIO</span><strong className={verification?.verified ? "approved" : "pending"}>{verification ? verification.verified ? "ACEPTAR" : "RECHAZAR" : "VERIFICACIÓN PENDIENTE"}</strong><p>{verification ? verification.verified ? "Todos los controles pasaron contra el estado vivo." : "La compra no cumple una o más condiciones." : "VuelaYa no confía en una afirmación del agente: consulta el mandato antes de cobrar."}</p></div>
+            <div className="merchant-check-grid">{verification ? Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}><i>{passed ? "✓" : "×"}</i>{humanizeCheck(check)}</span>) : demoMerchantChecks.map((check) => <span key={check}><i>·</i>{check}</span>)}</div>
+          </div>
+        )}
+
+        {perspective === "auditor" && (
+          <div id="perspective-panel-auditor" role="tabpanel" aria-labelledby="perspective-tab-auditor">
+            <AuditTrail entries={demo?.audit || []} />
+            <section className="backend-proof">
+              <div><span>PRUEBA DE BACKEND</span><strong>{demo?.network.name || "Circuito sin iniciar"}</strong><small>chain ID {demo?.network.chainId || "—"} · último bloque {demo?.network.latestBlock || "—"}</small></div>
+              <div><span>CONTRATO DE MANDATOS</span><code>{demo?.contracts.vault || "—"}</code></div>
+              <div><span>ADAPTADOR DE PAGO MOCK</span><code>{demo?.contracts.cardProcessor || "—"}</code></div>
+            </section>
+          </div>
+        )}
+      </section>
     </section>
   );
+}
+
+const demoMerchantChecks = [
+  "Compra conocida",
+  "Mandato activo",
+  "Comercio autorizado",
+  "Método de pago verificado",
+  "Credencial del comprador válida",
+  "Checkout firmado por VuelaYa",
+  "Cotización vigente",
+  "Autorización reservada",
+  "Revisión actual",
+  "Credencial de un uso válida",
+];
+
+const demoPerspectives = [
+  { id: "buyer", label: "Marta" },
+  { id: "merchant", label: "VuelaYa" },
+  { id: "auditor", label: "Auditor" },
+];
+
+function handlePerspectiveKeyDown(event, index, setPerspective) {
+  const lastIndex = demoPerspectives.length - 1;
+  let nextIndex;
+  if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1;
+  else if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1;
+  else if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = lastIndex;
+  else return;
+  event.preventDefault();
+  const nextPerspective = demoPerspectives[nextIndex];
+  setPerspective(nextPerspective.id);
+  document.getElementById(`perspective-tab-${nextPerspective.id}`)?.focus();
+}
+
+function AuditTrail({ entries }) {
+  if (entries.length === 0) return <div className="audit-empty">Iniciá el circuito para generar un rastro verificable.</div>;
+  return (
+    <div className="live-demo-audit">
+      <div className="audit-head"><span>#</span><span>Actor y evento</span><span>Evidencia</span><span>Referencia</span></div>
+      {entries.map((entry, index) => {
+        const event = auditEventCopy(entry);
+        return <div className={entry.outcome === "rejected" ? "rejected" : ""} key={`${entry.type}-${index}`}><b>{index + 1}</b><div><span>{event.actor}</span><strong>{event.title}</strong></div><p>{event.detail}</p><small>bloque {entry.blockNumber} · {entry.transactionHash ? shortAddress(entry.transactionHash) : "sin transacción"}</small></div>;
+      })}
+    </div>
+  );
+}
+
+function auditEventCopy(entry) {
+  const events = {
+    local_payment_stack_deployed: ["Sistema", "Circuito local desplegado", "MandateVault y el adaptador de pago mock quedaron listos."],
+    kyc_login_payment_enrolled: ["Marta", "Identidad y token verificados", "La credencial KYC se vinculó a un token opaco de pago."],
+    bank_capture_consent_recorded: ["Marta", "Consentimiento de captura registrado", "El método solo puede cobrarse con una autorización elegible."],
+    mandate_signed: ["Marta", "Mandato firmado", "El agente recibió límites verificables; no se movieron fondos."],
+    merchant_quote_bound_by_agent: ["CHK Buyer", "Checkout de VuelaYa vinculado", "La orden firmada quedó unida al mandato y nació una credencial de un uso."],
+    merchant_verification_passed: ["VuelaYa", entry.context === "capture_revalidation" ? "Revalidación de captura aprobada" : "Verificación aprobada", "Identidad, mandato, límites, checkout y credencial de un uso pasaron contra el estado vivo."],
+    merchant_verification_failed: ["VuelaYa", entry.context === "capture_revalidation" ? "Revalidación de captura rechazada" : "Verificación rechazada", entry.failedChecks?.length ? `Fallaron: ${entry.failedChecks.map(humanizeCheck).join(", ")}. La captura quedó bloqueada.` : "Una o más condiciones del mandato ya no eran válidas; la captura quedó bloqueada."],
+    merchant_captured_purchase: ["VuelaYa", "Pago capturado", "El débito de Marta y la acreditación al comercio ocurrieron juntos."],
+    mandate_price_cap_amended: ["Marta", "Límite modificado", `Nuevo tope: US$${entry.maxUnitPrice}. Se incrementó la revisión.`],
+    mandate_revoked: ["Marta", "Mandato revocado", "Toda autorización nueva y captura pendiente queda bloqueada."],
+    unused_authorization_released: entry.releasedBy === "agent"
+      ? ["CHK Buyer", "Autorización de prueba liberada", "El agente anuló su credencial sin usar para recuperar capacidad; no se movió dinero."]
+      : ["Marta", "Autorización liberada", "La credencial sin usar se anuló sin mover dinero."],
+    agent_purchase_rejected: ["CHK Buyer", "Intento rechazado", explainDemoError(entry.detail, entry.unitPrice, entry.maxUnitPrice)],
+  };
+  const [actor, title, detail] = events[entry.type] || ["Sistema", entry.type, entry.detail || "El estado del circuito cambió."];
+  return { actor, title, detail };
 }
 
 function shortAddress(address) {
   return address ? `${address.slice(0, 8)}…${address.slice(-6)}` : "—";
 }
 
+function formatDemoDate(value) {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+  } catch {
+    return "—";
+  }
+}
+
+function formatDemoAmount(value) {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 6 }).format(value);
+}
+
+function explainDemoError(message, attemptedPrice, currentLimit) {
+  if (!message) return "La operación no pudo completarse.";
+  if (message.includes("PRICE_EXCEEDED")) {
+    return attemptedPrice && currentLimit
+      ? `US$${attemptedPrice} supera el tope vigente de US$${currentLimit}. El contrato rechazó la compra y no movió dinero.`
+      : "El precio supera el tope vigente del mandato. El contrato rechazó la compra y no movió dinero.";
+  }
+  if (message.includes("MANDATE_INACTIVE")) return "El mandato está revocado o vencido. El contrato bloqueó el intento antes de emitir una autorización.";
+  if (message.includes("QUANTITY_EXCEEDED")) return "La cantidad supera los usos restantes del mandato. No se emitió una autorización.";
+  if (message.includes("BUDGET_EXCEEDED")) return "El intento supera el presupuesto restante del mandato. No se movió dinero.";
+  if (message.includes("MANDATE_AMENDED")) return "La autorización pertenece a una revisión anterior. El comercio debe rechazarla o liberarla.";
+  if (message.includes("Merchant verification failed")) return "La verificación viva del comercio falló; la captura no fue intentada.";
+  if (message.includes("UNCHANGED_LIMIT")) return "El nuevo tope debe ser distinto del vigente.";
+  if (message.includes("MANDATE_NOT_ACTIVE")) return "El mandato ya no está activo.";
+  return message;
+}
+
+function isExpectedPolicyRejection(message = "") {
+  return ["PRICE_EXCEEDED", "MANDATE_INACTIVE", "QUANTITY_EXCEEDED", "BUDGET_EXCEEDED", "CHECKOUT_EXPIRED", "NOT_AGENT", "INVALID_MERCHANT_QUOTE"].some((code) => message.includes(code));
+}
+
+function attemptStatusLabel(status) {
+  return {
+    authorized: "Compra autorizada",
+    settled: "Compra realizada",
+    rejected: "Compra rechazada",
+    released: "Autorización liberada",
+    error: "Error sin decisión",
+  }[status] || status;
+}
+
 function humanizeCheck(check) {
-  return check.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+  const labels = {
+    knownPurchase: "Compra conocida",
+    mandateActive: "Mandato activo",
+    merchantMatches: "Comercio autorizado",
+    kycPaymentMethodBound: "Método de pago verificado",
+    buyerCredentialMatches: "Credencial del comprador válida",
+    merchantSignedCheckoutBound: "Checkout firmado por VuelaYa",
+    checkoutStillValid: "Cotización vigente",
+    authorizationReserved: "Autorización reservada",
+    authorizationCurrent: "Revisión actual",
+    virtualCardAuthorized: "Credencial de un uso válida",
+  };
+  return labels[check] || check.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function MoneyNode({ icon: Icon, label, value, status, address, highlighted = false }) {

@@ -79,14 +79,16 @@ flowchart LR
 ## Current implementation notes
 
 - `MandateVault` is an authorization ledger, not a user-funds wallet. In the
-  mock, `MockCardProcessor` charges at reservation and holds mock USD until the
-  merchant captures or releases the virtual card.
+  mock, `MockCardProcessor` issues a merchant-bound, one-use authorization at
+  reservation without moving money. Capture atomically debits the buyer and
+  credits the merchant; the processor does not hold a buyer float.
 - A browser EVM wallet currently signs `createMandate`. This proves publication
   for the mock, but conflicts with the selected TradFi-first buyer UX; a
   production adapter or relayer remains to be designed.
-- `MandateVault` currently supports creation and revocation. Versioned
-  amendments and a complete policy hash exist in the separate `MandateModule`
-  prototype and are not yet part of the canonical payment flow.
+- `MandateVault` currently supports creation, revocation, and a versioned
+  unit-price-cap amendment. Broader policy amendments and a complete policy
+  hash exist in the separate `MandateModule` prototype and are not yet part of
+  the canonical payment flow.
 - The agent's discovery and decision modules exist, but the live chain reader
   and UI-to-agent execution bridge are not connected yet.
 - The mock virtual-card path is implemented. Stripe is a selected merchant

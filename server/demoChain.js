@@ -62,6 +62,25 @@ function displayUsd(amount) {
   return ethers.formatUnits(amount, USD_DECIMALS);
 }
 
+async function readLatestBlock(provider) {
+  const block = await provider.send("eth_getBlockByNumber", ["latest", false]);
+  return {
+    number: Number(block.number),
+    timestamp: Number(block.timestamp),
+  };
+}
+
+async function sendWithNonceRecovery(signer, send) {
+  try {
+    return await send();
+  } catch (error) {
+    // NonceManager advances before some estimate/broadcast failures. Resetting
+    // here lets the next policy-compliant action reuse the real pending nonce.
+    signer.reset();
+    throw error;
+  }
+}
+
 function errorMessage(error) {
   return error?.info?.error?.message || error?.shortMessage || error?.message || "Transaction failed";
 }
@@ -100,9 +119,9 @@ export class DemoChain {
     const processor = await deploy(owner, "contracts/MockCardProcessor.sol", "MockCardProcessor", [usd.target]);
     const vault = await deploy(owner, "contracts/MandateVault.sol", "MandateVault", [processor.target]);
 
-    const setVaultTx = await processor.setVault(vault.target);
+    const setVaultTx = await sendWithNonceRecovery(owner, () => processor.setVault(vault.target));
     await setVaultTx.wait();
-    await (await usd.mint(owner.address, parseUsd("2000", "seed balance"))).wait();
+    await (await sendWithNonceRecovery(owner, () => usd.mint(owner.address, parseUsd("2000", "seed balance")))).wait();
 
     this.runtime = {
       provider,
@@ -130,13 +149,17 @@ export class DemoChain {
     const runtime = await this.ensure();
     if (runtime.paymentMethodEnrolled) throw new Error("Buyer KYC/login and payment enrollment are already complete.");
 
-    const enrollmentTx = await runtime.processor.connect(runtime.owner).registerVerifiedPaymentMethod(
-      paymentMethodId,
-      runtime.owner.address,
-      kycCredentialHash,
-    );
+    const enrollmentTx = await sendWithNonceRecovery(runtime.owner, () => (
+      runtime.processor.connect(runtime.owner).registerVerifiedPaymentMethod(
+        paymentMethodId,
+        runtime.owner.address,
+        kycCredentialHash,
+      )
+    ));
     const enrollmentReceipt = await enrollmentTx.wait();
-    const consentTx = await runtime.usd.connect(runtime.owner).approve(runtime.processor.target, ethers.MaxUint256);
+    const consentTx = await sendWithNonceRecovery(runtime.owner, () => (
+      runtime.usd.connect(runtime.owner).approve(runtime.processor.target, ethers.MaxUint256)
+    ));
     const consentReceipt = await consentTx.wait();
     runtime.paymentMethodEnrolled = true;
     this.audit.push({
@@ -170,17 +193,19 @@ export class DemoChain {
       throw new Error("budget must cover quantity × maxUnitPrice.");
     }
 
-    const latestBlock = await runtime.provider.getBlock("latest");
-    const createMandateTx = await runtime.vault.connect(runtime.owner).createMandate(
-      runtime.agent.address,
-      runtime.merchant.address,
-      paymentMethodId,
-      runtime.productHash,
-      quantity,
-      maxUnitPrice,
-      budget,
-      Number(latestBlock.timestamp) + 30 * 24 * 60 * 60,
-    );
+    const latestBlock = await readLatestBlock(runtime.provider);
+    const createMandateTx = await sendWithNonceRecovery(runtime.owner, () => (
+      runtime.vault.connect(runtime.owner).createMandate(
+        runtime.agent.address,
+        runtime.merchant.address,
+        paymentMethodId,
+        runtime.productHash,
+        quantity,
+        maxUnitPrice,
+        budget,
+        Number(latestBlock.timestamp) + 30 * 24 * 60 * 60,
+      )
+    ));
     const createMandateReceipt = await createMandateTx.wait();
     runtime.mandateCreated = true;
     this.audit.push({
@@ -199,8 +224,10 @@ export class DemoChain {
 
   async state() {
     const runtime = await this.ensure();
-    const latestBlock = await runtime.provider.getBlock("latest");
+    const latestBlock = await readLatestBlock(runtime.provider);
     const mandate = runtime.mandateCreated ? await runtime.vault.mandates(1) : null;
+    const mandateIsActive = mandate ? await runtime.vault.isMandateActive(1) : false;
+    const storedMandateStatus = mandate ? ["None", "Active", "Revoked"][Number(mandate.status)] : null;
     return {
       network: {
         name: "CHK local chain (Ganache)",
@@ -217,7 +244,7 @@ export class DemoChain {
       },
       mandate: mandate ? {
         id: "1",
-        status: ["None", "Active", "Revoked"][Number(mandate.status)],
+        status: storedMandateStatus === "Revoked" ? "Revoked" : mandateIsActive ? "Active" : "Expired",
         productHash: runtime.productHash,
         kycCredentialHash: mandate.kycCredentialHash,
         maxUnitPrice: displayUsd(mandate.maxUnitPrice),
@@ -240,7 +267,7 @@ export class DemoChain {
     if (!runtime.mandateCreated) throw new Error("A signed mandate is required before the agent can purchase.");
     const reference = orderReference || `offer-${Date.now()}`;
     const orderId = ethers.id(reference);
-    const quotedAt = await runtime.provider.getBlock("latest");
+    const quotedAt = await readLatestBlock(runtime.provider);
     const checkoutExpiresAt = Number(quotedAt.timestamp) + 5 * 60;
     const parsedUnitPrice = parseUsd(unitPrice, "unitPrice");
     const parsedQuantity = BigInt(quantity);
@@ -255,15 +282,56 @@ export class DemoChain {
     const purchaseId = ethers.keccak256(
       ethers.AbiCoder.defaultAbiCoder().encode(["uint256", "bytes32"], [1, checkoutHash]),
     );
-    const tx = await runtime.vault.connect(runtime.agent).reservePurchase(
-      1,
-      orderId,
-      checkoutExpiresAt,
-      parsedQuantity,
-      parsedUnitPrice,
-      merchantSignature,
-    );
-    const receipt = await tx.wait();
+    let tx;
+    try {
+      tx = await sendWithNonceRecovery(runtime.agent, () => (
+        runtime.vault.connect(runtime.agent).reservePurchase(
+          1,
+          orderId,
+          checkoutExpiresAt,
+          parsedQuantity,
+          parsedUnitPrice,
+          merchantSignature,
+        )
+      ));
+    } catch (error) {
+      const mandate = await runtime.vault.mandates(1);
+      const active = await runtime.vault.isMandateActive(1);
+      const amount = parsedQuantity * parsedUnitPrice;
+      let reason = errorMessage(error);
+
+      if (!active) {
+        reason = "MANDATE_INACTIVE: the mandate is revoked or expired.";
+      } else if (parsedQuantity > mandate.remainingQuantity) {
+        reason = "QUANTITY_EXCEEDED: the purchase exceeds the remaining authorized quantity.";
+      } else if (parsedUnitPrice > mandate.maxUnitPrice) {
+        reason = `PRICE_EXCEEDED: US$${displayUsd(parsedUnitPrice)} exceeds the US$${displayUsd(mandate.maxUnitPrice)} unit limit.`;
+      } else if (amount > mandate.remainingBudget) {
+        reason = "BUDGET_EXCEEDED: the purchase exceeds the remaining mandate budget.";
+      }
+
+      const latestBlock = await readLatestBlock(runtime.provider);
+      this.audit.push({
+        type: "agent_purchase_rejected",
+        outcome: "rejected",
+        orderReference: reference,
+        quantity: parsedQuantity.toString(),
+        unitPrice: displayUsd(parsedUnitPrice),
+        maxUnitPrice: displayUsd(mandate.maxUnitPrice),
+        detail: reason,
+        transactionHash: null,
+        blockNumber: latestBlock.number,
+      });
+      throw new Error(reason);
+    }
+    let receipt;
+    try {
+      receipt = await tx.wait();
+    } catch (error) {
+      const purchase = await runtime.vault.purchases(purchaseId);
+      if (Number(purchase.status) === 0) throw error;
+      receipt = { blockNumber: (await readLatestBlock(runtime.provider)).number };
+    }
     this.audit.push({
       type: "merchant_quote_bound_by_agent",
       purchaseId,
@@ -276,13 +344,13 @@ export class DemoChain {
     return { purchaseId, transactionHash: tx.hash, state: await this.state() };
   }
 
-  async verifyPurchase(purchaseId) {
+  async verifyPurchase(purchaseId, options = {}) {
     const runtime = await this.ensure();
     const purchase = await runtime.vault.purchases(purchaseId);
     const mandate = await runtime.vault.mandates(purchase.mandateId);
     const virtualCard = await runtime.processor.virtualCards(purchaseId);
     const active = await runtime.vault.isMandateActive(purchase.mandateId);
-    const latestBlock = await runtime.provider.getBlock("latest");
+    const latestBlock = await readLatestBlock(runtime.provider);
     const computedCheckoutHash = Number(purchase.status) === 0
       ? ethers.ZeroHash
       : await runtime.vault.checkoutHashFor(
@@ -304,7 +372,7 @@ export class DemoChain {
       authorizationCurrent: purchase.mandateRevision === mandate.revision,
       virtualCardAuthorized: Number(virtualCard.status) === 1,
     };
-    return {
+    const result = {
       purchaseId,
       verified: Object.values(checks).every(Boolean),
       checks,
@@ -318,13 +386,32 @@ export class DemoChain {
       },
       mandateRevision: mandate.revision.toString(),
     };
+    if (options.recordAudit !== false) {
+      this.audit.push({
+        type: result.verified ? "merchant_verification_passed" : "merchant_verification_failed",
+        outcome: result.verified ? "verified" : "rejected",
+        context: options.context || "merchant_review",
+        purchaseId,
+        mandateRevision: result.mandateRevision,
+        checks,
+        failedChecks: Object.entries(checks).filter(([, passed]) => !passed).map(([check]) => check),
+        detail: result.verified
+          ? "VuelaYa verified every mandate, identity, checkout, and one-use authorization check against live state."
+          : "VuelaYa rejected the purchase after one or more live mandate checks failed.",
+        transactionHash: null,
+        blockNumber: latestBlock.number,
+      });
+    }
+    return result;
   }
 
   async capturePurchase(purchaseId) {
     const runtime = await this.ensure();
-    const verification = await this.verifyPurchase(purchaseId);
+    const verification = await this.verifyPurchase(purchaseId, { context: "capture_revalidation" });
     if (!verification.verified) throw new Error("Merchant verification failed; capture was not attempted.");
-    const tx = await runtime.vault.connect(runtime.merchant).settlePurchase(purchaseId);
+    const tx = await sendWithNonceRecovery(runtime.merchant, () => (
+      runtime.vault.connect(runtime.merchant).settlePurchase(purchaseId)
+    ));
     const receipt = await tx.wait();
     this.audit.push({
       type: "merchant_captured_purchase",
@@ -337,7 +424,9 @@ export class DemoChain {
 
   async amendPriceCap(maxUnitPrice) {
     const runtime = await this.ensure();
-    const tx = await runtime.vault.connect(runtime.owner).amendMaxUnitPrice(1, parseUsd(maxUnitPrice, "maxUnitPrice"));
+    const tx = await sendWithNonceRecovery(runtime.owner, () => (
+      runtime.vault.connect(runtime.owner).amendMaxUnitPrice(1, parseUsd(maxUnitPrice, "maxUnitPrice"))
+    ));
     const receipt = await tx.wait();
     this.audit.push({
       type: "mandate_price_cap_amended",
@@ -350,19 +439,22 @@ export class DemoChain {
 
   async revokeMandate() {
     const runtime = await this.ensure();
-    const tx = await runtime.vault.connect(runtime.owner).revokeMandate(1);
+    const tx = await sendWithNonceRecovery(runtime.owner, () => runtime.vault.connect(runtime.owner).revokeMandate(1));
     const receipt = await tx.wait();
     this.audit.push({ type: "mandate_revoked", transactionHash: tx.hash, blockNumber: receipt.blockNumber });
     return this.state();
   }
 
-  async releasePurchase(purchaseId) {
+  async releasePurchase(purchaseId, releasedBy = "buyer") {
     const runtime = await this.ensure();
-    const tx = await runtime.vault.connect(runtime.owner).releasePurchase(purchaseId);
+    const signer = releasedBy === "agent" ? runtime.agent : runtime.owner;
+    const tx = await sendWithNonceRecovery(signer, () => runtime.vault.connect(signer).releasePurchase(purchaseId));
     const receipt = await tx.wait();
     this.audit.push({
       type: "unused_authorization_released",
       purchaseId,
+      releasedBy: releasedBy === "agent" ? "agent" : "buyer",
+      releasedByAddress: signer.address,
       transactionHash: tx.hash,
       blockNumber: receipt.blockNumber,
     });
