@@ -1,0 +1,34 @@
+{
+  "op": "intent_extraction",
+  "user": "Necesito 20 litros de leche descremada, si no hay conseguime lo que haya. Presupuesto $60.000",
+  "recordedAt": "2026-08-29T18:10:07.763Z",
+  "response": {
+    "status": "ok",
+    "commitment": "committed",
+    "natural_language_description": "Necesito 20 litros de leche descremada, si no hay conseguime lo que haya. Presupuesto $60.000",
+    "needs": [
+      {
+        "canonical": "leche",
+        "attrs": [
+          {
+            "key": "tipo",
+            "value": "descremada"
+          }
+        ],
+        "qty": 20,
+        "unit": "L",
+        "substitutes_allowed": true
+      }
+    ],
+    "constraints": {
+      "budget_ars": 60000,
+      "allowed_categories": [],
+      "forbidden_categories": [],
+      "allowed_suppliers": null,
+      "max_delivery_days": null
+    },
+    "intent_expiry": null,
+    "user_cart_confirmation_required": false,
+    "questions": []
+  }
+}

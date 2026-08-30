@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   Building2,
   Check,
-  CheckCircle2,
   ChevronRight,
   ClipboardList,
   Clock3,
@@ -13,13 +11,8 @@ import {
   History,
   MessageSquare,
   Plus,
-  QrCode,
-  RefreshCw,
   Send,
-  ShieldCheck,
-  Smartphone,
   Store,
-  Unplug,
   WalletCards,
 } from "lucide-react";
 
@@ -28,7 +21,6 @@ const tabs = [
   { id: "mandates", label: "Mandatos", icon: ClipboardList },
   { id: "history", label: "Historial", icon: History },
   { id: "account", label: "Cuenta", icon: WalletCards },
-  { id: "whatsapp", label: "Avisos", icon: Bell },
 ];
 
 const initialMessages = [];
@@ -99,7 +91,6 @@ function App() {
         )}
         {activeTab === "history" && <HistoryPage />}
         {activeTab === "account" && <AccountPage />}
-        {activeTab === "whatsapp" && <WhatsappPage />}
       </main>
     </div>
   );
@@ -154,7 +145,7 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
       {
         id: crypto.randomUUID(),
         role: "agent",
-        content: "Mandato v4 firmado y registrado en Polygon · Demo. Ya puedo comenzar con chk! it out.",
+        content: "Mandato v4 firmado. Ya puedo comenzar con chk! it out.",
         time: "Ahora",
       },
     ]);
@@ -366,11 +357,8 @@ function MandateDetailPage({ mandate, onBack, onRevoke }) {
 function MandateSummary({ mandate, available, activity, purchases: relatedPurchases }) {
   const lastPurchase = relatedPurchases[0];
   const executionSteps = lastPurchase ? [
-    { label: "chk! it out · oferta elegida", detail: `${lastPurchase.quantity} a ${lastPurchase.supplier}` },
-    { label: "write the chk! · saldo retirado", detail: `${currency.format(lastPurchase.total)} → chk! fund` },
-    { label: "Autorización registrada", detail: `Polygon · Demo · ${lastPurchase.transaction}` },
-    { label: "Tarjeta virtual generada", detail: `${lastPurchase.card} · un solo uso` },
-    { label: "Mandato validado por el vendedor", detail: "Activo · agente y monto autorizados" },
+    { label: "Oferta elegida", detail: `${lastPurchase.quantity} a ${lastPurchase.supplier}` },
+    { label: "Saldo retirado", detail: `${currency.format(lastPurchase.total)} de la cuenta` },
     { label: "Compra confirmada", detail: lastPurchase.id },
   ] : [];
 
@@ -417,8 +405,6 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
             <DataRow label="Cuenta" value={mandate.account} />
             <DataRow label="Saldo actual" value={currency.format(mandate.accountBalance)} />
             <DataRow label="Método" value={mandate.paymentMethod} />
-            <DataRow label="Última tarjeta" value={mandate.lastCard} />
-            <DataRow label="Payment delegate" value={mandate.paymentDelegate} />
           </dl>
         </article>
 
@@ -443,31 +429,6 @@ function MandateSummary({ mandate, available, activity, purchases: relatedPurcha
         </div>
       </article>
 
-      {lastPurchase && (
-        <article className="merchant-verification-panel">
-          <div className="merchant-verification-copy">
-            <span>PRESENTACIÓN AL VENDEDOR · DEMO</span>
-            <h2>{lastPurchase.supplier} aceptó la compra</h2>
-            <p>El vendedor verificó la autorización actual contra MandateModule sin acceder a la política privada completa.</p>
-          </div>
-          <div className="merchant-checks">
-            <span><Check size={13} />Mandato activo</span>
-            <span><Check size={13} />Agente autorizado</span>
-            <span><Check size={13} />Monto dentro del límite</span>
-            <span><Check size={13} />Autorización de un uso válida</span>
-          </div>
-        </article>
-      )}
-
-      <details className="technical-details">
-        <summary><ShieldCheck size={16} />Detalles técnicos simulados</summary>
-        <dl>
-          <DataRow label="Owner" value={mandate.owner} />
-          <DataRow label="Agent" value={mandate.agentAddress} />
-          <DataRow label="Policy hash" value={mandate.policyHash} />
-          <DataRow label="Contrato" value="MandateModule · Polygon Demo" />
-        </dl>
-      </details>
     </div>
   );
 }
@@ -481,7 +442,7 @@ function DataRow({ label, value }) {
 }
 
 function MandateActivity({ activity }) {
-  const icons = { success: CheckCircle2, card: CreditCard, chain: ShieldCheck, account: WalletCards, supplier: Store, search: Clock3 };
+  const icons = { success: Check, card: CreditCard, account: WalletCards, supplier: Store, search: Clock3 };
   return (
     <div className="mandate-section-content narrow-content">
       <div className="full-activity-list">
@@ -591,17 +552,7 @@ function AccountPage() {
             <div><span>Ejecutado este mes</span><strong>{currency.format(0)}</strong></div>
             <div><span>Reintegros</span><strong>{currency.format(0)}</strong></div>
           </div>
-          <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar y se consumen al emitir la tarjeta virtual.</p>
-        </article>
-
-        <article className="account-panel card-policy-panel">
-          <div className="account-card-heading"><ShieldCheck size={18} /><span>TARJETAS VIRTUALES</span></div>
-          <dl className="detail-data-list">
-            <DataRow label="Modalidad" value="Un solo uso" />
-            <DataRow label="Límite" value="Importe exacto de la orden" />
-            <DataRow label="Vigencia" value="Hasta completar el checkout" />
-            <DataRow label="Payment delegate" value="VirtualCardAdapter" />
-          </dl>
+          <p>Los fondos se retiran de tu cuenta cuando el agente decide comprar.</p>
         </article>
       </div>
 
@@ -610,11 +561,9 @@ function AccountPage() {
         <div className="money-flow">
           <div><i>1</i><span><strong>El agente decide</strong><small>La oferta cumple el mandato</small></span></div>
           <ArrowRight size={17} />
-          <div><i>2</i><span><strong>Cuenta → chk! fund</strong><small>El saldo se retira</small></span></div>
+          <div><i>2</i><span><strong>Saldo retirado</strong><small>De la cuenta de origen</small></span></div>
           <ArrowRight size={17} />
-          <div><i>3</i><span><strong>Polygon</strong><small>Registra la autorización</small></span></div>
-          <ArrowRight size={17} />
-          <div><i>4</i><span><strong>Tarjeta virtual</strong><small>Paga al productor</small></span></div>
+          <div><i>3</i><span><strong>Compra confirmada</strong><small>El proveedor recibe el pago</small></span></div>
         </div>
       </article>
 
@@ -626,201 +575,6 @@ function AccountPage() {
   );
 }
 
-function WhatsappPage() {
-  const [view, setView] = useState("inbox");
-  const [connection, setConnection] = useState({ status: "loading", qr: null, user: null, error: null });
-  const [action, setAction] = useState(null);
-  const [notice, setNotice] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-
-    async function refreshStatus() {
-      try {
-        const response = await fetch("/api/whatsapp/status");
-        const data = await response.json();
-        if (active) setConnection(data);
-      } catch {
-        if (active) setConnection({ status: "error", error: "No se pudo contactar al servidor" });
-      }
-    }
-
-    refreshStatus();
-    const interval = setInterval(refreshStatus, 1500);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  async function runAction(name, url, options) {
-    setAction(name);
-    setNotice(null);
-    try {
-      const response = await fetch(url, options);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "La operación no pudo completarse");
-      if (name === "test") setNotice("Mensaje de prueba enviado a tu propio chat.");
-      else setConnection(data);
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setAction(null);
-    }
-  }
-
-  const status = connection.status;
-  const phone = connection.user?.id?.split("@")[0] || "";
-
-  return (
-    <section className="page whatsapp-page">
-      <nav className="notice-subnav" aria-label="Avisos y notificaciones">
-        <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}>Bandeja <span>4</span></button>
-        <button className={view === "preferences" ? "active" : ""} onClick={() => setView("preferences")}>Preferencias</button>
-        <button className={view === "whatsapp" ? "active" : ""} onClick={() => setView("whatsapp")}>WhatsApp</button>
-      </nav>
-
-      {view === "inbox" && <NotificationsInbox />}
-      {view === "preferences" && <NotificationPreferences />}
-      {view === "whatsapp" && <div className="whatsapp-card">
-        <div className="whatsapp-copy">
-          <div className="whatsapp-icon"><Smartphone size={23} /></div>
-          <span className="setup-label">INTEGRACIÓN</span>
-          <h1>Avisos y notificaciones</h1>
-          <p>Configurá WhatsApp para recibir en tu propio chat las novedades de chk! Buyer, tu agente de compras.</p>
-          <ol>
-            <li>Abrí WhatsApp en tu teléfono.</li>
-            <li>Entrá en <strong>Dispositivos vinculados</strong>.</li>
-            <li>Elegí <strong>Vincular un dispositivo</strong> y escaneá el QR.</li>
-          </ol>
-          <div className="baileys-note">Esta prueba utiliza Baileys y guarda la sesión solamente en este servidor.</div>
-        </div>
-
-        <div className="whatsapp-state">
-          {(status === "loading" || status === "connecting" || status === "reconnecting") && (
-            <div className="connection-panel">
-              <RefreshCw className="spin" size={27} />
-              <strong>{status === "reconnecting" ? "Reconectando WhatsApp" : "Preparando conexión"}</strong>
-              <p>Esto puede demorar unos segundos.</p>
-            </div>
-          )}
-
-          {status === "disconnected" && (
-            <div className="connection-panel">
-              <div className="state-icon"><QrCode size={27} /></div>
-              <strong>Listo para vincular</strong>
-              <p>Generá un código QR para comenzar.</p>
-              <button
-                className="whatsapp-primary"
-                disabled={action === "connect"}
-                onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}
-              >
-                {action === "connect" ? "Generando..." : "Generar código QR"}
-              </button>
-            </div>
-          )}
-
-          {status === "qr" && connection.qr && (
-            <div className="qr-panel">
-              <span>Escaneá este código</span>
-              <div className="qr-frame"><img src={connection.qr} alt="Código QR para vincular WhatsApp" /></div>
-              <p>El código se renueva automáticamente si vence.</p>
-            </div>
-          )}
-
-          {status === "connected" && (
-            <div className="connection-panel connected">
-              <div className="connected-icon"><CheckCircle2 size={30} /></div>
-              <strong>WhatsApp conectado</strong>
-              <p>{connection.user?.name || "Cuenta vinculada"}{phone && ` · +${phone}`}</p>
-              <button
-                className="whatsapp-primary"
-                disabled={action === "test"}
-                onClick={() => runAction("test", "/api/whatsapp/test", { method: "POST" })}
-              >
-                <Send size={15} /> {action === "test" ? "Enviando..." : "Enviar mensaje de prueba"}
-              </button>
-              <button
-                className="disconnect-button"
-                disabled={action === "disconnect"}
-                onClick={() => runAction("disconnect", "/api/whatsapp/session", { method: "DELETE" })}
-              >
-                <Unplug size={14} /> Desvincular cuenta
-              </button>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="connection-panel error">
-              <strong>No pudimos iniciar WhatsApp</strong>
-              <p>{connection.error}</p>
-              <button className="whatsapp-primary" onClick={() => runAction("connect", "/api/whatsapp/connect", { method: "POST" })}>Reintentar</button>
-            </div>
-          )}
-
-          {notice && <div className="whatsapp-notice">{notice}</div>}
-        </div>
-      </div>}
-    </section>
-  );
-}
-
-function NotificationsInbox() {
-  const notices = [];
-
-  return (
-    <div className="notifications-layout">
-      <div className="notifications-list">
-        {notices.length === 0 ? (
-          <p className="empty-copy">No hay avisos todavía.</p>
-        ) : notices.map((notice) => {
-          const Icon = notice.icon;
-          return (
-            <article className="notification-item" key={`${notice.type}-${notice.meta}`}>
-              <div className="notification-icon"><Icon size={16} /></div>
-              <div className="notification-copy"><span>{notice.type}</span><h2>{notice.title}</h2><p>{notice.detail}</p><small>{notice.meta}</small></div>
-              <em>{notice.channel}</em>
-            </article>
-          );
-        })}
-      </div>
-      <aside className="notifications-summary">
-        <span>HOY</span>
-        <strong>0</strong>
-        <p>avisos enviados por WhatsApp</p>
-      </aside>
-    </div>
-  );
-}
-
-function NotificationPreferences() {
-  const preferences = [
-    ["Compra realizada", "Confirmación y detalle de cada orden", true],
-    ["Proveedor cambiado", "Proveedor anterior, nuevo y motivo", true],
-    ["Compra fallida", "Errores de checkout o rechazo", true],
-    ["Saldo insuficiente", "El agente no pudo retirar los fondos", true],
-    ["Fallo blockchain", "La autorización no pudo registrarse", true],
-    ["Tarjeta virtual fallida", "No se pudo emitir o utilizar la tarjeta", true],
-    ["Sin ofertas válidas", "Ninguna opción cumplió el mandato", true],
-    ["Mandato por vencer", "Aviso 7 días antes del vencimiento", true],
-    ["Búsqueda completada", "Resumen de cada ejecución programada", false],
-  ];
-
-  return (
-    <div className="preferences-panel">
-      <div className="preferences-heading"><div><span>NOTIFICACIONES</span><h2>Qué querés recibir</h2></div><p>Los eventos críticos siempre quedan registrados en la bandeja.</p></div>
-      <div className="preference-list">
-        {preferences.map(([title, description, enabled]) => (
-          <label key={title}>
-            <span><strong>{title}</strong><small>{description}</small></span>
-            <input type="checkbox" defaultChecked={enabled} />
-            <i />
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function Status({ value }) {
   return <span className={`status ${value.toLowerCase()}`}>{value}</span>;
