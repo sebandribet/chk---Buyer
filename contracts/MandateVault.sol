@@ -26,19 +26,25 @@ contract MandateVault {
         address agent;
         address merchant;
         bytes32 paymentMethodId;
+        bytes32 kycCredentialHash;
         bytes32 productHash;
         uint256 remainingQuantity;
         uint256 maxUnitPrice;
         uint256 remainingBudget;
         uint64 expiresAt;
+        uint64 revision;
         MandateStatus status;
     }
 
     struct Purchase {
         uint256 mandateId;
+        bytes32 checkoutHash;
+        bytes32 orderId;
         uint256 quantity;
         uint256 unitPrice;
         uint256 amount;
+        uint64 checkoutExpiresAt;
+        uint64 mandateRevision;
         PurchaseStatus status;
     }
 
@@ -56,22 +62,25 @@ contract MandateVault {
         address indexed agent,
         address merchant,
         bytes32 paymentMethodId,
+        bytes32 kycCredentialHash,
         bytes32 productHash,
         uint256 quantity,
         uint256 maxUnitPrice,
         uint256 budget,
         uint64 expiresAt
     );
-    event PurchaseReserved(
+    event PurchaseAuthorized(
         bytes32 indexed purchaseId,
         uint256 indexed mandateId,
-        bytes32 indexed orderId,
+        bytes32 indexed checkoutHash,
+        bytes32 orderId,
         uint256 quantity,
         uint256 unitPrice,
         uint256 amount
     );
     event PurchaseSettled(bytes32 indexed purchaseId, uint256 indexed mandateId, address indexed merchant, uint256 amount);
     event PurchaseReleased(bytes32 indexed purchaseId, uint256 indexed mandateId, uint256 amount);
+    event MandatePriceCapAmended(uint256 indexed mandateId, uint64 indexed revision, uint256 previousMaxUnitPrice, uint256 newMaxUnitPrice);
     event MandateRevoked(uint256 indexed mandateId);
 
     modifier nonReentrant() {
@@ -86,7 +95,7 @@ contract MandateVault {
         cardProcessor = cardProcessor_;
     }
 
-    /// @notice Creates a static mandate. No buyer funds are locked at creation.
+    /// @notice Creates a static mandate after the buyer has completed KYC/login payment enrollment.
     /// @param budget Maximum spend authorized under this mandate, in USD cents/microunits.
     function createMandate(
         address agent,
@@ -100,6 +109,7 @@ contract MandateVault {
     ) external returns (uint256 mandateId) {
         require(agent != address(0) && merchant != address(0), "ZERO_PARTY");
         require(paymentMethodId != bytes32(0) && productHash != bytes32(0), "MISSING_REFERENCE");
+        require(cardProcessor.isVerifiedPaymentMethod(msg.sender, paymentMethodId), "UNVERIFIED_PAYMENT_METHOD");
         require(quantity > 0 && maxUnitPrice > 0 && budget > 0, "INVALID_LIMIT");
         require(expiresAt > block.timestamp, "INVALID_EXPIRY");
         require(budget >= quantity * maxUnitPrice, "BUDGET_BELOW_CAP");
@@ -110,11 +120,13 @@ contract MandateVault {
             agent: agent,
             merchant: merchant,
             paymentMethodId: paymentMethodId,
+            kycCredentialHash: cardProcessor.kycCredentialHash(paymentMethodId),
             productHash: productHash,
             remainingQuantity: quantity,
             maxUnitPrice: maxUnitPrice,
             remainingBudget: budget,
             expiresAt: expiresAt,
+            revision: 1,
             status: MandateStatus.Active
         });
 
@@ -124,6 +136,7 @@ contract MandateVault {
             agent,
             merchant,
             paymentMethodId,
+            cardProcessor.kycCredentialHash(paymentMethodId),
             productHash,
             quantity,
             maxUnitPrice,
@@ -132,38 +145,47 @@ contract MandateVault {
         );
     }
 
-    /// @notice Validates an agent purchase, charges the saved buyer credential, and issues a one-use virtual card.
-    /// @dev If the buyer charge fails, this entire transaction reverts and mandate capacity is unchanged.
+    /// @notice Binds the agent's purchase to a merchant-signed checkout and issues a one-use authorization.
+    /// @dev No funds move here. The buyer's KYC-linked payment method is charged only during merchant capture.
     function reservePurchase(
         uint256 mandateId,
         bytes32 orderId,
+        uint64 checkoutExpiresAt,
         uint256 quantity,
-        uint256 unitPrice
+        uint256 unitPrice,
+        bytes calldata merchantSignature
     ) external nonReentrant returns (bytes32 purchaseId) {
         Mandate storage mandate = mandates[mandateId];
         require(msg.sender == mandate.agent, "NOT_AGENT");
         require(_isActive(mandate), "MANDATE_INACTIVE");
         require(orderId != bytes32(0) && quantity > 0, "INVALID_PURCHASE");
+        require(checkoutExpiresAt >= block.timestamp && checkoutExpiresAt <= mandate.expiresAt, "CHECKOUT_EXPIRED");
         require(quantity <= mandate.remainingQuantity, "QUANTITY_EXCEEDED");
         require(unitPrice <= mandate.maxUnitPrice, "PRICE_EXCEEDED");
 
         uint256 amount = quantity * unitPrice;
         require(amount <= mandate.remainingBudget, "BUDGET_EXCEEDED");
 
-        purchaseId = keccak256(abi.encode(mandateId, orderId));
+        bytes32 checkoutHash = checkoutHashFor(mandateId, orderId, checkoutExpiresAt, quantity, unitPrice);
+        require(_merchantSignedCheckout(checkoutHash, merchantSignature, mandate.merchant), "INVALID_MERCHANT_QUOTE");
+
+        purchaseId = keccak256(abi.encode(mandateId, checkoutHash));
         require(purchases[purchaseId].status == PurchaseStatus.None, "ORDER_ALREADY_USED");
 
-        // A failed card-on-file charge reverts all of these state changes.
         mandate.remainingQuantity -= quantity;
         mandate.remainingBudget -= amount;
         purchases[purchaseId] = Purchase({
             mandateId: mandateId,
+            checkoutHash: checkoutHash,
+            orderId: orderId,
             quantity: quantity,
             unitPrice: unitPrice,
             amount: amount,
+            checkoutExpiresAt: checkoutExpiresAt,
+            mandateRevision: mandate.revision,
             status: PurchaseStatus.Reserved
         });
-        cardProcessor.chargeAndIssueVirtualCard(
+        cardProcessor.issueVirtualCardAuthorization(
             purchaseId,
             mandate.owner,
             mandate.paymentMethodId,
@@ -171,7 +193,7 @@ contract MandateVault {
             amount
         );
 
-        emit PurchaseReserved(purchaseId, mandateId, orderId, quantity, unitPrice, amount);
+        emit PurchaseAuthorized(purchaseId, mandateId, checkoutHash, orderId, quantity, unitPrice, amount);
     }
 
     /// @notice Lets the approved merchant capture its one-use virtual card and receive USD.
@@ -182,13 +204,15 @@ contract MandateVault {
         require(msg.sender == mandate.merchant, "NOT_MERCHANT");
         require(purchase.status == PurchaseStatus.Reserved, "PURCHASE_NOT_RESERVED");
         require(_isActive(mandate), "MANDATE_INACTIVE");
+        require(purchase.mandateRevision == mandate.revision, "MANDATE_AMENDED");
+        require(block.timestamp <= purchase.checkoutExpiresAt, "CHECKOUT_EXPIRED");
 
-        purchase.status = PurchaseStatus.Settled;
         cardProcessor.captureVirtualCard(purchaseId, mandate.merchant);
+        purchase.status = PurchaseStatus.Settled;
         emit PurchaseSettled(purchaseId, purchase.mandateId, mandate.merchant, purchase.amount);
     }
 
-    /// @notice Cancels an unused virtual card, refunds the buyer, and restores mandate capacity.
+    /// @notice Cancels an unused authorization and restores mandate capacity. No refund is required.
     function releasePurchase(bytes32 purchaseId) external nonReentrant {
         Purchase storage purchase = purchases[purchaseId];
         Mandate storage mandate = mandates[purchase.mandateId];
@@ -201,8 +225,26 @@ contract MandateVault {
         purchase.status = PurchaseStatus.Released;
         mandate.remainingQuantity += purchase.quantity;
         mandate.remainingBudget += purchase.amount;
-        cardProcessor.refundUncapturedVirtualCard(purchaseId);
+        cardProcessor.voidUncapturedVirtualCard(purchaseId);
         emit PurchaseReleased(purchaseId, purchase.mandateId, purchase.amount);
+    }
+
+    /// @notice Lets the owner lower or raise the price cap without recreating the mandate.
+    /// @dev A revision change prevents capture of every unused virtual card issued under earlier terms.
+    function amendMaxUnitPrice(uint256 mandateId, uint256 newMaxUnitPrice) external {
+        Mandate storage mandate = mandates[mandateId];
+        require(msg.sender == mandate.owner, "NOT_OWNER");
+        require(_isActive(mandate), "MANDATE_INACTIVE");
+        require(newMaxUnitPrice > 0, "INVALID_LIMIT");
+
+        uint256 previousMaxUnitPrice = mandate.maxUnitPrice;
+        require(newMaxUnitPrice != previousMaxUnitPrice, "UNCHANGED_LIMIT");
+        mandate.maxUnitPrice = newMaxUnitPrice;
+        unchecked {
+            mandate.revision++;
+        }
+
+        emit MandatePriceCapAmended(mandateId, mandate.revision, previousMaxUnitPrice, newMaxUnitPrice);
     }
 
     /// @notice Immediately prevents new purchases and capture of unused virtual cards.
@@ -217,6 +259,53 @@ contract MandateVault {
 
     function isMandateActive(uint256 mandateId) external view returns (bool) {
         return _isActive(mandates[mandateId]);
+    }
+
+    /// @notice The canonical merchant checkout digest the agent must present with the merchant's signature.
+    /// @dev Includes chain and contract domains so a quote cannot be replayed across deployments or chains.
+    function checkoutHashFor(
+        uint256 mandateId,
+        bytes32 orderId,
+        uint64 checkoutExpiresAt,
+        uint256 quantity,
+        uint256 unitPrice
+    ) public view returns (bytes32) {
+        Mandate storage mandate = mandates[mandateId];
+        return keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                mandateId,
+                mandate.merchant,
+                mandate.productHash,
+                orderId,
+                checkoutExpiresAt,
+                quantity,
+                unitPrice
+            )
+        );
+    }
+
+    function _merchantSignedCheckout(
+        bytes32 checkoutHash,
+        bytes calldata signature,
+        address merchant
+    ) private pure returns (bool) {
+        if (signature.length != 65) return false;
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+        if (v < 27) v += 27;
+        if (v != 27 && v != 28) return false;
+
+        bytes32 ethSignedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", checkoutHash));
+        return ecrecover(ethSignedHash, v, r, s) == merchant;
     }
 
     function _isActive(Mandate storage mandate) private view returns (bool) {

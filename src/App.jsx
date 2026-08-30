@@ -26,6 +26,7 @@ import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisp
 
 const tabs = [
   { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "demo", label: "Live demo", icon: ShieldCheck },
   { id: "mandates", label: "Mandatos", icon: ClipboardList },
   { id: "history", label: "Historial", icon: History },
   { id: "account", label: "Cuenta", icon: WalletCards },
@@ -290,6 +291,7 @@ function App() {
             onOpenMandate={openMandate}
           />
         )}
+        {activeTab === "demo" && <LiveDemoPage />}
         {activeTab === "mandates" && (
           selectedMandateId ? (
             <MandateDetailPage
@@ -1044,6 +1046,244 @@ function NotificationPreferences() {
       </div>
     </div>
   );
+}
+
+async function demoRequest(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "The operation could not be completed.");
+  return payload;
+}
+
+function LiveDemoPage() {
+  const [demo, setDemo] = useState(null);
+  const [purchaseId, setPurchaseId] = useState(null);
+  const [verification, setVerification] = useState(null);
+  const [action, setAction] = useState(null);
+  const [notice, setNotice] = useState("Start the local chain, then complete KYC payment login before signing a mandate.");
+
+  async function startDemo() {
+    setAction("start");
+    setNotice("");
+    setPurchaseId(null);
+    setVerification(null);
+    try {
+      const state = await demoRequest("/api/demo/reset", {
+        method: "POST",
+        body: JSON.stringify({ product: "flight-cordoba", quantity: 1, maxUnitPrice: "150", budget: "150" }),
+      });
+      setDemo(state);
+      setNotice(`Local payment stack deployed in block ${state.network.latestBlock}. No mandate or payment credential exists yet.`);
+    } catch (error) {
+      setNotice(`Backend unavailable: ${error.message}`);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function completeKycLogin() {
+    setAction("kyc");
+    setNotice("");
+    try {
+      const state = await demoRequest("/api/demo/kyc/login", { method: "POST" });
+      setDemo(state);
+      setNotice(`KYC payment login confirmed in block ${state.network.latestBlock}. Marta's opaque payment token is ready for capture; no money moved.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function createMandate() {
+    setAction("mandate");
+    setNotice("");
+    try {
+      const state = await demoRequest("/api/demo/mandate", {
+        method: "POST",
+        body: JSON.stringify({ quantity: 1, maxUnitPrice: "150", budget: "150" }),
+      });
+      setDemo(state);
+      setNotice(`Mandate signed in block ${state.network.latestBlock}. Marta authorizes one flight to Córdoba up to US$150; no funds are locked.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function findAndAuthorize() {
+    setAction("authorize");
+    setNotice("");
+    try {
+      const result = await demoRequest("/api/demo/agent/purchase", {
+        method: "POST",
+        body: JSON.stringify({ orderReference: "VuelaYa-COR-130", quantity: 1, unitPrice: "130" }),
+      });
+      setPurchaseId(result.purchaseId);
+      setDemo(result.state);
+      setNotice(`Agent transaction confirmed in block ${result.state.network.latestBlock}. VuelaYa's signed US$130 checkout is bound to the mandate; Marta has not been charged.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function verifyPurchase() {
+    if (!purchaseId) return;
+    setAction("verify");
+    setNotice("");
+    try {
+      const result = await demoRequest(`/api/demo/merchant/verify/${purchaseId}`);
+      setVerification(result);
+      setNotice(result.verified
+        ? "VuelaYa read live chain state and approved every verification check."
+        : "Merchant verification failed. Capture is blocked.");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function capturePurchase() {
+    if (!purchaseId) return;
+    setAction("capture");
+    setNotice("");
+    try {
+      const result = await demoRequest(`/api/demo/merchant/capture/${purchaseId}`, { method: "POST" });
+      setDemo(result.state);
+      setNotice(`Merchant capture confirmed in block ${result.state.network.latestBlock}. US$130 is now in VuelaYa's account.`);
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  const balances = demo?.balances || { buyer: "—", cardProcessor: "—", merchant: "—" };
+  const hasKycPayment = Boolean(demo?.kyc?.captureReady);
+  const hasMandate = Boolean(demo?.mandate);
+  const isCaptured = Boolean(demo) && Number(balances.merchant) > 0;
+  const canVerify = Boolean(purchaseId) && !verification;
+  const canCapture = Boolean(verification?.verified) && !isCaptured;
+  const step = !demo ? 1 : !hasKycPayment ? 2 : !hasMandate ? 3 : !purchaseId ? 4 : !verification ? 5 : !isCaptured ? 6 : 7;
+
+  return (
+    <section className="page live-demo-page">
+      <div className="page-header live-demo-header">
+        <div>
+          <span className="eyebrow">LIVE BACKEND DEMO · LOCAL EVM CHAIN</span>
+          <h1>Autonomous purchase, proven step by step.</h1>
+          <p>This is not a simulated progress bar. Every step below calls the local payment backend, submits a contract transaction, and reads the resulting state back from the chain.</p>
+        </div>
+        <button className="secondary-button" onClick={startDemo} disabled={action !== null}>
+          <RefreshCw size={15} /> {action === "start" ? "Deploying..." : demo ? "Reset local chain" : "Start local chain"}
+        </button>
+      </div>
+
+      <div className="demo-stepper">
+        {[[1, "Start chain"], [2, "KYC + payment token"], [3, "Sign mandate"], [4, "Agent binds checkout"], [5, "Merchant verifies"], [6, "Capture and pay"]].map(([number, label]) => <div key={number} className={step > number ? "done" : step === number ? "current" : ""}><b>{step > number ? "✓" : number}</b><span>{label}</span></div>)}
+      </div>
+
+      <div className="live-demo-mandate">
+        <div><span>BUYER + KYC LOGIN</span><strong>Marta · mock business bank account</strong><code>{demo?.kyc?.status || "not started"} · {shortAddress(demo?.identities?.owner)}</code></div>
+        <div><span>MANDATE</span><strong>1 Córdoba flight · max US$ {demo?.mandate?.maxUnitPrice || "150.0"}</strong><code>revision {demo?.mandate?.revision || "—"} · {demo?.mandate?.status || "not signed"}</code></div>
+        <div><span>PURCHASING AGENT</span><strong>CHK Buyer · separate wallet</strong><code>{shortAddress(demo?.identities.agent)}</code></div>
+        <div><span>APPROVED MERCHANT</span><strong>VuelaYa</strong><code>{shortAddress(demo?.identities.merchant)}</code></div>
+      </div>
+
+      <section className="live-demo-actions demo-setup-actions">
+        <article>
+          <span>STEP 2 · BUYER KYC / PAYMENT LOGIN</span>
+          <p>KYC verifies Marta and saves only an opaque card-on-file token. This permits instant capture later, but stores no raw card data and locks no funds.</p>
+          <button className="secondary-button" onClick={completeKycLogin} disabled={!demo || hasKycPayment || action !== null}>
+            <ShieldCheck size={15} /> {action === "kyc" ? "Enrolling payment token..." : hasKycPayment ? "KYC payment token ready" : "Complete KYC payment login"}
+          </button>
+        </article>
+        <article>
+          <span>STEP 3 · HUMAN SIGNS MANDATE</span>
+          <p>Marta delegates one specific flight purchase to CHK Buyer. The contract binds the agent, merchant, product rule, price cap, KYC reference, and revocation state.</p>
+          <button className="secondary-button" onClick={createMandate} disabled={!hasKycPayment || hasMandate || action !== null}>
+            <CheckCircle2 size={15} /> {action === "mandate" ? "Signing mandate..." : hasMandate ? "Mandate signed" : "Sign mandate"}
+          </button>
+        </article>
+      </section>
+
+      <div className="live-demo-offer">
+        <div className="offer-copy"><span>AGENT DISCOVERY RESULT</span><h2>Buenos Aires → Córdoba</h2><p>VuelaYa · US$130 · below Marta’s US$150 mandate limit.</p></div>
+        <div className="offer-price"><span>US$130</span><small>best eligible offer</small></div>
+        <button className="primary-button" onClick={findAndAuthorize} disabled={!hasMandate || action !== null || Boolean(purchaseId)}>
+          <CheckCircle2 size={15} /> {action === "authorize" ? "Binding checkout..." : purchaseId ? "Checkout bound" : "Agent buys automatically"}
+        </button>
+      </div>
+
+      <section className="money-flow" aria-label="Live money movement">
+        <MoneyNode icon={Building2} label="Marta's bank balance" value={`US$${balances.buyer}`} status={isCaptured ? "US$130 debited at capture" : purchaseId ? "Unchanged — capture pending" : "No mandate funds locked"} address={shortAddress(demo?.identities?.owner)} />
+        <FlowArrow active={isCaptured} label="capture-only debit" />
+        <MoneyNode icon={CreditCard} label="KYC-linked one-use credential" value={isCaptured ? "Consumed" : purchaseId ? "US$130 authorized" : "Not issued"} status={isCaptured ? "Used for VuelaYa checkout" : purchaseId ? "No funds held; VuelaYa only" : "Issued after quote binding"} highlighted={Boolean(purchaseId)} address={shortAddress(demo?.contracts?.cardProcessor)} />
+        <FlowArrow active={isCaptured} label="merchant capture" />
+        <MoneyNode icon={Store} label="VuelaYa settlement balance" value={`US$${balances.merchant}`} status={isCaptured ? "Payment received" : "Cannot receive before verification"} highlighted={isCaptured} address={shortAddress(demo?.identities?.merchant)} />
+      </section>
+
+      <section className="live-demo-actions">
+        <article>
+          <span>STEP 5 · LIVE MERCHANT CHECK</span>
+          <p>VuelaYa queries the contract. It must see an active mandate, KYC-linked payment token, matching merchant, current revision, signed checkout hash, and a live one-use credential.</p>
+          <button className="secondary-button" onClick={verifyPurchase} disabled={!canVerify || action !== null}>
+            <ShieldCheck size={15} /> {action === "verify" ? "Reading chain state..." : verification ? "Verification approved" : "Verify mandate live"}
+          </button>
+        </article>
+        <article>
+          <span>STEP 6 · CAPTURE PAYMENT</span>
+          <p>Only a verified merchant can capture. This atomically debits Marta’s tokenized card-on-file and pays VuelaYa in the next block—no pre-funded escrow.</p>
+          <button className="primary-button" onClick={capturePurchase} disabled={!canCapture || action !== null}>
+            <WalletCards size={15} /> {action === "capture" ? "Capturing on-chain..." : isCaptured ? "Payment settled" : "Capture US$130"}
+          </button>
+        </article>
+      </section>
+
+      {verification && (
+        <div className="verification-result">
+          <strong><ShieldCheck size={16} /> Merchant verification {verification.verified ? "passed" : "failed"}</strong>
+          <div>{Object.entries(verification.checks).map(([check, passed]) => <span key={check} className={passed ? "passed" : "failed"}>{passed ? "✓" : "×"} {humanizeCheck(check)}</span>)}</div>
+        </div>
+      )}
+
+      <p className="live-demo-notice">{notice}</p>
+
+      <section className="backend-proof">
+        <div><span>BACKEND PROOF</span><strong>{demo?.network.name || "Waiting to start the local chain"}</strong><small>chain ID {demo?.network.chainId || "—"} · latest block {demo?.network.latestBlock || "—"}</small></div>
+        <div><span>MANDATE CONTRACT</span><code>{demo?.contracts.vault || "—"}</code></div>
+        <div><span>PAYMENT PROCESSOR CONTRACT</span><code>{demo?.contracts.cardProcessor || "—"}</code></div>
+      </section>
+
+      <div className="live-demo-audit">
+        <span>ON-CHAIN TRANSACTION LOG</span>
+        {(demo?.audit || []).map((entry, index) => <div key={`${entry.type}-${index}`}><b>{index + 1}</b><code>{entry.type}</code><p>{entry.detail || entry.orderReference || entry.maxUnitPrice || "contract state changed"}</p><small>block {entry.blockNumber} · {shortAddress(entry.transactionHash)}</small></div>)}
+      </div>
+    </section>
+  );
+}
+
+function shortAddress(address) {
+  return address ? `${address.slice(0, 8)}…${address.slice(-6)}` : "—";
+}
+
+function humanizeCheck(check) {
+  return check.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function MoneyNode({ icon: Icon, label, value, status, address, highlighted = false }) {
+  return <article className={`money-node ${highlighted ? "highlighted" : ""}`}><Icon size={21} /><span>{label}</span><strong>{value}</strong><small>{status}</small><code>{address}</code></article>;
+}
+
+function FlowArrow({ active, label }) {
+  return <div className={`flow-arrow ${active ? "active" : ""}`}><i>→</i><span>{label}</span></div>;
 }
 
 function Status({ value }) {
