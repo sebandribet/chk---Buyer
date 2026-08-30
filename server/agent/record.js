@@ -30,6 +30,13 @@ const REHEARSALS = [
   ["Let's go to Brazil"],
   ["I want help preparing for a presentation."],
   ["Book me the cheapest direct flight to Cordoba on 2026-09-15 for one person, up to $200"],
+  // The two-turn script the composer offers on Tab, for every mock destination.
+  // Each budget admits the cheapest nonstop and excludes the next one up, so the
+  // signed mandate visibly rejects a fare rather than accepting everything.
+  ["How much is a flight to Cordoba?", "From Buenos Aires, 2 passengers, on 2026-09-15, any airline, up to $300 total, and this mandate stays valid through 2026-09-20"],
+  ["How much is a flight to Sao Paulo?", "From Buenos Aires, 2 passengers, on 2026-09-15, direct, any airline, up to $600 total, and this mandate stays valid through 2026-09-20"],
+  ["How much is a flight to Bogota?", "From Buenos Aires, 1 passenger, on 2026-09-15, direct, any airline, up to $450 total, and this mandate stays valid through 2026-09-20"],
+  ["How much is a flight to Mexico City?", "From Buenos Aires, 1 passenger, on 2026-09-15, direct, any airline, up to $650 total, and this mandate stays valid through 2026-09-20"],
 ];
 
 const ctx = {

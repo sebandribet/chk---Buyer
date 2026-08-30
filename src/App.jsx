@@ -557,7 +557,7 @@ function MandateMenu({ draft, form, editable, reviewed, signed, busy, onChange, 
   const missing = draft.questions ?? [];
   return (
     <section className="mandate-menu">
-      <div className="menu-heading"><div><span className="section-label"><FileSignature size={14} /> Human validation menu</span><h2>Flight purchase mandate</h2></div><span className={`draft-pill ${draft.status}`}>{draft.status.replace("_", " ")}</span></div>
+      <div className="menu-heading"><span className="section-label"><FileSignature size={14} /> Human validation menu</span><span className={`draft-pill ${draft.status}`}>{draft.status.replace("_", " ")}</span></div>
       {missing.length > 0 && <div className="required-note"><AlertTriangle size={15} /><span><strong>Before this can be signed:</strong> {missing.map((question) => question.question).join(" ")}</span></div>}
 
       <form className="mandate-form" onSubmit={onSave}>

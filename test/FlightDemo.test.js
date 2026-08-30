@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DemoChain } from "../server/demoChain.js";
 import { StubLlmClient } from "../server/agent/llm.js";
-import { searchFlights } from "../server/mockFlights.js";
+import { allFlights, searchFlights } from "../server/mockFlights.js";
 
 /**
  * The chain tests script the model so they stay offline and deterministic.
@@ -162,6 +162,47 @@ test("expiry blocks a valid-looking purchase on the local chain", async () => {
   assert.equal(result.state.mandate.status, "Expired");
   assert.equal(result.state.balances.buyer, "2000.0");
   await assert.rejects(chain.compareAndAuthorize(), /Sign a flight mandate|no longer active/);
+});
+
+test("every mock destination has a nonstop option a mandate can actually reach", () => {
+  const routes = new Map();
+  for (const flight of allFlights()) {
+    if (!routes.has(flight.destination)) routes.set(flight.destination, []);
+    routes.get(flight.destination).push(flight);
+  }
+  assert.deepEqual(
+    [...routes.keys()].sort(),
+    ["Bogota", "Cordoba", "Mendoza", "Mexico City", "Sao Paulo"],
+  );
+  for (const [destination, flights] of routes) {
+    // maxStops defaults to 0 on an unstated draft, so a route whose every
+    // itinerary connects can never produce an eligible offer.
+    assert.ok(
+      flights.some((flight) => flight.stops === 0),
+      `${destination} has no nonstop option`,
+    );
+  }
+});
+
+test("a city is not also read as the country its name contains", () => {
+  // " mexico city " contains " mexico ", so the country alias matched inside
+  // the city one. That put two places in a single-destination request, and
+  // productMatchesOffer then demanded the itinerary match a country nobody
+  // named. Longest alias wins, and its span is consumed.
+  for (const [query, destination] of [
+    ["Flight from Buenos Aires to Mexico City on 2026-09-15", "Mexico City"],
+    ["Flight from Buenos Aires to CDMX on 2026-09-15", "Mexico City"],
+    ["Flight from Buenos Aires to Sao Paulo on 2026-09-15", "Sao Paulo"],
+    ["Flight from Buenos Aires to Bogota on 2026-09-15", "Bogota"],
+  ]) {
+    const found = searchFlights({ productName: query, origin: "Buenos Aires", destination });
+    assert.equal(found.offers.length, 3, `${destination} should return its three itineraries`);
+  }
+
+  // The country on its own still matches no itinerary, which is the safe
+  // "no offer" path the mandate is meant to reach.
+  const country = searchFlights({ productName: "Flight to Mexico", origin: "Buenos Aires", destination: "Mexico City" });
+  assert.equal(country.offers.length, 0);
 });
 
 test("the signed free-text product query is still a real search filter", () => {

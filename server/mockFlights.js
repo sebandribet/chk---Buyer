@@ -83,6 +83,141 @@ const FLIGHTS = [
     unitPrice: "122.00",
     fareNote: "Early departure. Complimentary cabin bag.",
   },
+  {
+    quoteId: "VY-AS-GRU-0915-0705",
+    merchant: "VuelaYa",
+    airline: "AeroSur",
+    origin: "Buenos Aires",
+    destination: "Sao Paulo",
+    departureDate: "2026-09-15",
+    departureTime: "07:05",
+    arrivalTime: "10:20",
+    cabin: "Economy",
+    stops: 0,
+    seats: 6,
+    unitPrice: "268.00",
+    fareNote: "Morning departure into Guarulhos. Checked bag included.",
+  },
+  {
+    quoteId: "SH-RP-GRU-0915-1215",
+    merchant: "SkyLink",
+    airline: "Rio Plata Air",
+    origin: "Buenos Aires",
+    destination: "Sao Paulo",
+    departureDate: "2026-09-15",
+    departureTime: "12:15",
+    arrivalTime: "15:35",
+    cabin: "Economy",
+    stops: 0,
+    seats: 3,
+    unitPrice: "284.00",
+    fareNote: "Midday departure. Seat selection available at check-in.",
+  },
+  {
+    quoteId: "SH-FF-GRU-0915-1830",
+    merchant: "SkyLink",
+    airline: "FlyFast",
+    origin: "Buenos Aires",
+    destination: "Sao Paulo",
+    departureDate: "2026-09-15",
+    departureTime: "18:30",
+    arrivalTime: "23:55",
+    cabin: "Economy",
+    stops: 1,
+    seats: 9,
+    unitPrice: "221.00",
+    fareNote: "Cheapest Sao Paulo fare, routed via Montevideo.",
+  },
+  {
+    quoteId: "VY-AN-BOG-0915-0640",
+    merchant: "VuelaYa",
+    airline: "Andina Air",
+    origin: "Buenos Aires",
+    destination: "Bogota",
+    departureDate: "2026-09-15",
+    departureTime: "06:40",
+    arrivalTime: "13:10",
+    cabin: "Economy",
+    stops: 0,
+    seats: 5,
+    unitPrice: "412.00",
+    fareNote: "Nonstop to El Dorado. Cabin bag only on this fare.",
+  },
+  {
+    quoteId: "SH-AS-BOG-0915-1105",
+    merchant: "SkyLink",
+    airline: "AeroSur",
+    origin: "Buenos Aires",
+    destination: "Bogota",
+    departureDate: "2026-09-15",
+    departureTime: "11:05",
+    arrivalTime: "19:40",
+    cabin: "Economy",
+    stops: 1,
+    seats: 7,
+    unitPrice: "358.00",
+    fareNote: "Cheapest Bogota fare, one stop in Lima.",
+  },
+  {
+    quoteId: "VY-FF-BOG-0915-2015",
+    merchant: "VuelaYa",
+    airline: "FlyFast",
+    origin: "Buenos Aires",
+    destination: "Bogota",
+    departureDate: "2026-09-15",
+    departureTime: "20:15",
+    arrivalTime: "02:50",
+    cabin: "Economy",
+    stops: 0,
+    seats: 2,
+    unitPrice: "455.00",
+    fareNote: "Overnight nonstop. Flexible ticket, changes free up to 24h before.",
+  },
+  {
+    quoteId: "SH-AZ-MEX-0915-0555",
+    merchant: "SkyLink",
+    airline: "Azteca Wings",
+    origin: "Buenos Aires",
+    destination: "Mexico City",
+    departureDate: "2026-09-15",
+    departureTime: "05:55",
+    arrivalTime: "14:25",
+    cabin: "Economy",
+    stops: 0,
+    seats: 4,
+    unitPrice: "598.00",
+    fareNote: "Nonstop to Benito Juarez. Checked bag included.",
+  },
+  {
+    quoteId: "VY-RP-MEX-0915-1330",
+    merchant: "VuelaYa",
+    airline: "Rio Plata Air",
+    origin: "Buenos Aires",
+    destination: "Mexico City",
+    departureDate: "2026-09-15",
+    departureTime: "13:30",
+    arrivalTime: "00:10",
+    cabin: "Economy",
+    stops: 1,
+    seats: 8,
+    unitPrice: "529.00",
+    fareNote: "Cheapest Mexico City fare, one stop in Panama City.",
+  },
+  {
+    quoteId: "SH-AS-MEX-0915-2140",
+    merchant: "SkyLink",
+    airline: "AeroSur",
+    origin: "Buenos Aires",
+    destination: "Mexico City",
+    departureDate: "2026-09-15",
+    departureTime: "21:40",
+    arrivalTime: "06:15",
+    cabin: "Economy",
+    stops: 0,
+    seats: 3,
+    unitPrice: "641.00",
+    fareNote: "Overnight nonstop. Seat selection available at check-in.",
+  },
 ];
 
 // These places are intentionally broader than the tiny demo offer catalog.
@@ -95,6 +230,15 @@ const placeAliases = {
   aeroparque: "Buenos Aires",
   cordoba: "Cordoba",
   mendoza: "Mendoza",
+  "sao paulo": "Sao Paulo",
+  "san pablo": "Sao Paulo",
+  guarulhos: "Sao Paulo",
+  gru: "Sao Paulo",
+  bogota: "Bogota",
+  "el dorado": "Bogota",
+  "mexico city": "Mexico City",
+  "ciudad de mexico": "Mexico City",
+  cdmx: "Mexico City",
   brazil: "Brazil",
   brasil: "Brazil",
   argentina: "Argentina",
@@ -162,18 +306,40 @@ function toUsd(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+/** Longest alias first, so a city is never read as the country inside its name. */
+const aliasEntries = Object.entries(placeAliases).sort(([left], [right]) => right.length - left.length);
+
+/**
+ * Every place named in the text, in the order they were written.
+ *
+ * A matched alias is blanked out of the haystack before the shorter ones are
+ * tried, which is what keeps "Mexico City" one place instead of also the
+ * country "Mexico" sitting inside it. Without that, one destination arrived
+ * downstream as two, and `productMatchesOffer` then demanded that a mandate's
+ * own itinerary match a country nobody named.
+ *
+ * The blanked span keeps its original length so every other alias still sits
+ * between the spaces it needs to be matched on.
+ */
+function matchedPlaces(text) {
+  let haystack = ` ${normalize(text)} `;
+  const firstSeen = new Map();
+  for (const [alias, place] of aliasEntries) {
+    const needle = ` ${alias} `;
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle)) {
+      if (!firstSeen.has(place)) firstSeen.set(place, at);
+      haystack = haystack.slice(0, at) + " ".repeat(needle.length) + haystack.slice(at + needle.length);
+    }
+  }
+  return [...firstSeen.entries()].sort(([, left], [, right]) => left - right).map(([place]) => place);
+}
+
 function findPlace(text, fallback = "") {
-  const normalized = normalize(text);
-  const padded = ` ${normalized} `;
-  return Object.entries(placeAliases).find(([alias]) => padded.includes(` ${alias} `))?.[1] ?? fallback;
+  return matchedPlaces(text)[0] ?? fallback;
 }
 
 function citiesMentioned(text) {
-  const normalized = normalize(text);
-  const padded = ` ${normalized} `;
-  return [...new Set(Object.entries(placeAliases)
-    .filter(([alias]) => padded.includes(` ${alias} `))
-    .map(([, city]) => city))];
+  return matchedPlaces(text);
 }
 
 function placeAfter(text, marker) {
