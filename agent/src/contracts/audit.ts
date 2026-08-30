@@ -89,6 +89,80 @@ export type AuditEvent = AuditEventBase &
      */
     | { type: "injection_attempt_detected"; sku: string; supplierId: string; snippet: string }
     | { type: "policy_check"; check: string; passed: boolean; detail: string }
+    /** El merchant cerró el carrito y lo firmó. A partir de acá el precio no lo pone el agente. */
+    | {
+        type: "checkout_closed";
+        checkoutId: string;
+        merchantId: string;
+        /** Unidad mínima de la moneda. */
+        amount: number;
+        checkoutHash: string;
+      }
+    /**
+     * Se reservó presupuesto on-chain. Es el momento exacto en que la propuesta
+     * pasa a comprometer plata, y por eso queda con el id de la autorización:
+     * es lo que después permite atarlo al cobro y al recibo del vendedor.
+     */
+    | {
+        type: "authorization_reserved";
+        authorizationId: string;
+        mandateId: string;
+        amount: number;
+        expiresAt: number;
+      }
+    /**
+     * Qué se le mostró al vendedor y qué NO. Los campos ocultos se registran
+     * por nombre: sin eso, "revelamos lo mínimo" es una afirmación que nadie
+     * puede auditar después.
+     */
+    | {
+        type: "presentation_built";
+        audience: string;
+        disclosed: string[];
+        withheld: string[];
+      }
+    /**
+     * Hay plata comprometida sobre la tarjeta y todavía NO se movió.
+     *
+     * Es el evento más importante del trail de pagos porque marca el comienzo
+     * de la ventana en la que una revocación todavía sirve. Los dos importes
+     * quedan registrados: el humano firmó pesos y se le retiene en dólares, y
+     * sin las dos cifras nadie puede auditar después si se respetó el mandato.
+     */
+    | {
+        type: "payment_authorized";
+        provider: string;
+        holdRef: string;
+        authorizationId: string;
+        authorizedMinor: number;
+        authorizedCurrency: string;
+        chargedMinor: number;
+        chargedCurrency: string;
+        fxRate: number;
+      }
+    /** Se cobró. A partir de acá la plata se movió y sólo se puede devolver. */
+    | {
+        type: "payment_captured";
+        provider: string;
+        holdRef: string;
+        captureRef: string;
+        capturedMinor: number;
+        capturedCurrency: string;
+      }
+    /** Se soltó la retención sin cobrar. La plata nunca se movió. */
+    | {
+        type: "payment_released";
+        provider: string;
+        holdRef: string;
+        reason: string;
+      }
+    /** El proveedor dijo que no. El motivo importa: no es lo mismo sin fondos que bloqueada. */
+    | {
+        type: "payment_failed";
+        provider: string;
+        code: string;
+        detail: string;
+      }
     /**
      * `clarification` y `suggestion` no son `DecisionOutcome`: en ninguno de los
      * dos el agente llegó a decidir una compra.

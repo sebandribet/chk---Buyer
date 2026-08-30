@@ -651,14 +651,25 @@ function draftMandate(intent: PurchaseIntent, selection: Selection): MandateDraf
     ...new Set(selection.lines.map((l) => l.candidate.offer.product.category)),
   ];
 
-  const presupuesto =
-    intent.constraints.budgetArs ?? Math.ceil(selection.totalArs / 1000) * 1000;
+  const alMilTerminado = (n: number) => Math.max(1000, Math.ceil(n / 1000) * 1000);
+
+  const presupuesto = intent.constraints.budgetArs ?? alMilTerminado(selection.totalArs);
+
+  // Techo por compra: lo que cuesta ESTA compra, no el presupuesto entero. Un
+  // mandato donde los dos límites coinciden autoriza, técnicamente, gastarlo
+  // todo de una sola vez — que es justo lo que el techo por compra evita.
+  //
+  // Se acota al presupuesto porque el contrato exige `maxTotal >= maxPerOperation`
+  // y rechaza los términos si no se cumple.
+  const porCompra = Math.min(alMilTerminado(selection.totalArs), presupuesto);
 
   return {
     naturalLanguageDescription: intent.naturalLanguageDescription,
     allowedCategories: categoriasUsadas.length > 0 ? categoriasUsadas : openCategories(intent),
     suggestedBudgetArs: presupuesto,
+    suggestedMaxPerPurchaseArs: porCompra,
     allowedSuppliers: intent.constraints.allowedSuppliers,
+    maxDeliveryDays: intent.constraints.maxDeliveryDays,
     expiresAt: intent.intentExpiry,
     userCartConfirmationRequired: true,
   };

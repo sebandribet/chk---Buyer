@@ -7,11 +7,14 @@
  * evento por evento. Eso es lo que hace que los golden tests sirvan de algo.
  */
 
-import type { AuditEvent, AuditEventInput, AuditLog } from "@/contracts/index.js";
+import type { AuditEvent, AuditEventInput, AuditLog, Clock } from "@/contracts/index.js";
 
-export interface Clock {
-  now(): Date;
-}
+/**
+ * Re-exportado desde `contracts/` para no romper los imports que ya existían.
+ * La definición vive allá porque el verificador del merchant también la
+ * necesita y no puede importar nada de este directorio.
+ */
+export type { Clock } from "@/contracts/clock.js";
 
 /** Reloj congelado. Es el que usan los tests para probar vencimientos sin esperar. */
 export class FixedClock implements Clock {
