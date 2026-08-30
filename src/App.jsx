@@ -23,6 +23,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { mandateScenarios, toCanonicalMandate } from "../ui/mandates/mandateDisplayModels.ts";
+import { publishMandate } from "./blockchain/mandateVaultPublisher.js";
 
 const tabs = [
   { id: "chat", label: "Chat", icon: MessageSquare },
@@ -53,6 +54,13 @@ const initialMessages = [
     time: "09:41",
     draft: {
       version: 4,
+      blockchain: {
+        productReference: "industrial-stretch-film-50cm-500m-23microns",
+        quantity: 20,
+        maxUnitPrice: "8500",
+        budget: "500000",
+        expiresAt: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+      },
       product: "Film stretch industrial",
       specification: "50 cm x 500 m · 23 micrones",
       quantity: "Hasta 20 rollos",
@@ -263,6 +271,7 @@ function App() {
   });
   const [messages, setMessages] = useState(initialMessages);
   const [draftApproved, setDraftApproved] = useState(false);
+  const [publication, setPublication] = useState({ status: "idle", error: null });
   const [mandates, setMandates] = useState(initialMandates);
   const [selectedMandateId, setSelectedMandateId] = useState(null);
 
@@ -278,6 +287,45 @@ function App() {
     replaceTabInUrl("mandates");
   }
 
+  async function publishApprovedDraft(draft) {
+    if (publication.status === "signing" || draftApproved) return;
+
+    setPublication({ status: "signing", error: null });
+    try {
+      const result = await publishMandate(
+        {
+          ...draft.blockchain,
+          agent: import.meta.env.VITE_MANDATE_AGENT_ADDRESS,
+          merchant: import.meta.env.VITE_MANDATE_MERCHANT_ADDRESS,
+          paymentMethodId: import.meta.env.VITE_MANDATE_PAYMENT_METHOD_ID,
+          tokenDecimals: Number(import.meta.env.VITE_MANDATE_TOKEN_DECIMALS ?? 6),
+        },
+        { vaultAddress: import.meta.env.VITE_MANDATE_VAULT_ADDRESS },
+      );
+
+      setDraftApproved(true);
+      setPublication({ status: "published", error: null });
+      setMandates((current) => current.map((item) => item.id === "MD-001" ? {
+        ...item,
+        version: 4,
+        chainMandateId: result.mandateId,
+        chainTransactionHash: result.transactionHash,
+      } : item));
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "agent",
+          content: `Mandate ${result.mandateId} was signed by your wallet and published on-chain. Transaction: ${result.transactionHash}`,
+          time: "Now",
+        },
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The mandate could not be published.";
+      setPublication({ status: "error", error: message });
+    }
+  }
+
   return (
     <div className="app">
       <Header activeTab={activeTab} onTabChange={navigateToTab} />
@@ -287,10 +335,8 @@ function App() {
             messages={messages}
             onMessagesChange={setMessages}
             draftApproved={draftApproved}
-            onDraftApproved={() => {
-              setDraftApproved(true);
-              setMandates((current) => current.map((item) => item.id === "MD-001" ? { ...item, version: 4 } : item));
-            }}
+            publication={publication}
+            onDraftApproved={publishApprovedDraft}
             mandates={mandates}
             onOpenMandates={() => navigateToTab("mandates")}
             onOpenMandate={openMandate}
@@ -359,7 +405,7 @@ function Header({ activeTab, onTabChange }) {
   );
 }
 
-function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, mandates, onOpenMandates, onOpenMandate }) {
+function ChatPage({ messages, onMessagesChange, draftApproved, publication, onDraftApproved, mandates, onOpenMandates, onOpenMandate }) {
   const [message, setMessage] = useState("");
 
   function sendMessage(event) {
@@ -440,7 +486,8 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
                       <MandateDraftCard
                         draft={item.draft}
                         approved={draftApproved}
-                        onApprove={approveDraft}
+                        publication={publication}
+                        onApprove={() => onDraftApproved(item.draft)}
                         onEdit={() => setMessage("Quiero modificar: ")}
                       />
                     ) : <p>{item.content}</p>}
@@ -472,12 +519,12 @@ function ChatPage({ messages, onMessagesChange, draftApproved, onDraftApproved, 
   );
 }
 
-function MandateDraftCard({ draft, approved, onApprove, onEdit }) {
+function MandateDraftCard({ draft, approved, publication, onApprove, onEdit }) {
   return (
     <article className="draft-card">
       <div className="draft-card-header">
         <div><span>MANDATE DRAFT</span><strong>Borrador v{draft.version}</strong></div>
-        <em>{approved ? "Firmado" : "Sin firmar"}</em>
+        <em>{approved ? "Firmado" : publication.status === "signing" ? "Esperando firma" : "Sin firmar"}</em>
       </div>
       <div className="draft-product"><strong>{draft.product}</strong><span>{draft.specification}</span></div>
       <dl>
@@ -489,11 +536,12 @@ function MandateDraftCard({ draft, approved, onApprove, onEdit }) {
         <DataRow label="Método" value={draft.paymentMethod} />
       </dl>
       <div className="draft-actions">
-        <button onClick={onEdit} disabled={approved}>Seguir editando</button>
-        <button className="approve-draft" onClick={onApprove} disabled={approved}>
-          {approved ? <><Check size={14} />Mandato firmado</> : <>Revisar y firmar <ArrowRight size={14} /></>}
+        <button onClick={onEdit} disabled={approved || publication.status === "signing"}>Seguir editando</button>
+        <button className="approve-draft" onClick={onApprove} disabled={approved || publication.status === "signing"}>
+          {approved ? <><Check size={14} />Mandato publicado</> : publication.status === "signing" ? "Firmando..." : <>Revisar y firmar <ArrowRight size={14} /></>}
         </button>
       </div>
+      {publication.status === "error" && <p className="draft-publication-error">{publication.error}</p>}
     </article>
   );
 }
